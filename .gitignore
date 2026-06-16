@@ -1,0 +1,34 @@
+# Secrets
+.env
+*.db
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+
+# Google credentials (if added later)
+credentials.json
+token.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Virtual environment
+venv/
+.venv/
+env/
+
+# Test artifacts
+.pytest_cache/
+htmlcov/
+.coverage
