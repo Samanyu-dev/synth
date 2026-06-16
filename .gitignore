@@ -32,3 +32,4 @@ env/
 .pytest_cache/
 htmlcov/
 .coverage
+*.xlsx

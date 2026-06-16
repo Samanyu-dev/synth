@@ -19,13 +19,17 @@ class Settings(BaseSettings):
     )
 
     # Data paths — default to local data/ directory
-    triathlon_data_path: str = Field(
-        default="data/Copy of Triathlon Training Sync.xlsx",
-        description="Path to the triathlon training Excel file"
+    triathlon_daily_csv: str = Field(
+        default="data/Copy of Triathlon Training Sync-daily_summary.csv",
+        description="Path to the triathlon daily summary CSV"
     )
-    rowing_data_path: str = Field(
-        default="data/rowing_women_2025-2026 ERGS-2.xlsx",
-        description="Path to the rowing erg results Excel file"
+    triathlon_activities_csv: str = Field(
+        default="data/Copy of Triathlon Training Sync-activities_raw.csv",
+        description="Path to the triathlon activities CSV"
+    )
+    rowing_data_dir: str = Field(
+        default="data",
+        description="Directory containing rowing erg CSV files"
     )
 
     # Database
