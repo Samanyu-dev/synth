@@ -12,9 +12,14 @@ from pydantic import Field
 class Settings(BaseSettings):
     """Application settings loaded from .env file."""
 
-    # Required — Claude API
-    anthropic_api_key: str = Field(
+    # Required — Gemini API
+    gemini_api_key: str = Field(
         ...,
+        description="Gemini API key for synthesis"
+    )
+
+    anthropic_api_key: str = Field(
+        default="",
         description="Anthropic API key for Claude synthesis"
     )
 
@@ -48,6 +53,30 @@ class Settings(BaseSettings):
     rate_limit: str = Field(
         default="10/minute",
         description="API rate limit per client IP"
+    )
+
+    # Strava OAuth
+    strava_client_id: str = Field(
+        default="",
+        description="Strava API Client ID"
+    )
+    strava_client_secret: str = Field(
+        default="",
+        description="Strava API Client Secret"
+    )
+
+    # Google Sheets
+    google_sheet_id: str = Field(
+        default="",
+        description="Google Sheet ID for two-way sync"
+    )
+    google_service_account_json: str = Field(
+        default="",
+        description="Google Service Account credentials JSON string"
+    )
+    google_service_account_file: str = Field(
+        default="",
+        description="Path to Google Service Account credentials JSON file"
     )
 
     # Claude model

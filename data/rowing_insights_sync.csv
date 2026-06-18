@@ -1,0 +1,5 @@
+timestamp,insights,risks,recommendations
+2026-06-17T16:52:15.192420,System running in degraded mode (AI service unavailable). | Heuristics triggered 1 automated flags.,ALERT: HIGH_INDIVIDUAL_ABSENCE_RATE,Review automated heuristic alerts. | Try generating the report again later.
+2026-06-17T16:53:18.102900,System running in degraded mode (AI service unavailable). | Heuristics triggered 1 automated flags.,ALERT: HIGH_INDIVIDUAL_ABSENCE_RATE,Review automated heuristic alerts. | Try generating the report again later.
+2026-06-17T16:56:08.156617,System running in degraded mode (AI service unavailable). | Heuristics triggered 1 automated flags.,ALERT: HIGH_INDIVIDUAL_ABSENCE_RATE,Review automated heuristic alerts. | Try generating the report again later.
+2026-06-17T16:57:47.740195,System running in degraded mode (AI service unavailable). | Heuristics triggered 1 automated flags.,ALERT: HIGH_INDIVIDUAL_ABSENCE_RATE,Review automated heuristic alerts. | Try generating the report again later.

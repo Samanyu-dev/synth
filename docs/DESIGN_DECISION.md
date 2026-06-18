@@ -7,7 +7,7 @@ Synth MVP ingests athlete training and wellness data from two sources — a tria
 The core engineering question: **how should the system generate insights from the data?**
 
 Two options were evaluated:
-- **Option A**: LLM (Claude) + deterministic heuristics
+- **Option A**: LLM (Gemini) + deterministic heuristics
 - **Option B**: Custom machine learning model (supervised or unsupervised)
 
 ## 2. Data Characteristics
@@ -43,23 +43,23 @@ Two options were evaluated:
 
 2. **Summary builder** aggregates heuristics into structured prompts containing only computed numbers — never raw data rows.
 
-3. **Claude** interprets the summaries and returns structured JSON:
+3. **Gemini** interprets the summaries and returns structured JSON:
    - Insights (factual observations grounded in the data)
    - Risks (potential consequences)
    - Recommendations (actionable steps)
 
-4. **Validation layer** enforces the response schema with Pydantic, retries once on failure, and falls back to heuristic flags if Claude is unavailable.
+4. **Validation layer** enforces the response schema by requesting `application/json` from Gemini via the official SDK, and falls back to heuristic flags if Gemini is unavailable or errors out (Graceful Degradation).
 
 ### Strengths
 - **Explainable**: Every insight traces back to a specific metric. "Training load spiked 38%" is verifiable.
 - **Testable**: Heuristic functions are pure — known inputs, deterministic outputs, unit-testable.
 - **Works at any scale**: Produces valid output with 7 days of data or 141 days.
-- **Robust**: The system is useful even without Claude — heuristic flags still provide value.
+- **Robust**: The system is useful even without Gemini — heuristic flags still provide value.
 - **Extensible**: Adding a new metric (e.g., HRV when data becomes available) means adding one function and updating the prompt template.
 
 ### Weaknesses
-- LLMs can hallucinate — mitigated by summarising before sending and validating the response.
-- Claude API adds latency (~1–2 seconds) and cost — mitigated by sending summaries, not raw data.
+- LLMs can hallucinate — mitigated by summarising before sending and forcing JSON generation via the SDK.
+- Gemini API adds latency (~1–2 seconds) and cost — mitigated by sending summaries, not raw data.
 - The prompt template requires maintenance as heuristics evolve.
 
 ## 4. Option B: Custom ML Model
@@ -108,13 +108,13 @@ The system was intentionally designed around `daily_summary` and `activities_raw
 ## 7. Tradeoffs Acknowledged
 
 ### LLM hallucination risk
-**Mitigation**: The LLM never sees raw data. It receives pre-computed summaries with specific numbers. The response is validated against a Pydantic schema. If validation fails, the system retries once with a correction prompt. If it fails again, it returns heuristic flags as degraded-mode insights.
+**Mitigation**: The LLM never sees raw data. It receives pre-computed summaries with specific numbers. The response is validated by forcing `application/json` at the SDK level. If validation or the API call fails, the system catches the error and returns heuristic flags as degraded-mode insights.
 
 ### Recovery proxy vs real wellness data
 **Mitigation**: The recovery proxy uses rest day recency (binary, reliable), HR drift (derived, moderately reliable), and load trend (computed, reliable). It's explicitly documented as a proxy, not a measurement. The schema is ready for real wellness data when it becomes available — adding sleep and HRV would improve the recovery score without changing the architecture.
 
 ### Prompt injection from Excel data
-**Mitigation**: Only computed numeric summaries enter the Claude prompt. Raw string fields from the spreadsheet (athlete names, notes) never reach the model. Alert flags are internally generated strings like `TRAINING_SPIKE`, not user-supplied text.
+**Mitigation**: Only computed numeric summaries enter the Gemini prompt. Raw string fields from the spreadsheet (athlete names, notes) are strictly sanitized via regex before they ever hit the pipeline, throwing a 422 exception if malicious tags like `<script>` are detected. Alert flags are internally generated strings.
 
 ## 8. Future Evolution
 
@@ -131,8 +131,8 @@ The system was intentionally designed around `daily_summary` and `activities_raw
 - Split-level analysis for interval training optimisation
 - Multi-athlete support with per-athlete baselines
 - Real-time Strava webhook integration (replace Excel ingestion)
-- Background task queue for Claude calls
+- Background task queue for Gemini calls
 
 ---
 
-*This document was written before implementation began and updated throughout development. Last updated: Day 1.*
+*This document was updated during development to reflect the migration from Claude to Gemini due to API access limitations, proving the resilience of the Graceful Degradation architecture.*

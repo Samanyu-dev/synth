@@ -1,9 +1,10 @@
 """
-Integration tests for the Insights service using a mocked Claude client.
+Integration tests for the Insights service using a mocked Gemini client.
 Ensures prompt construction, JSON parsing, and fallback logic work.
 """
 
 import os
+os.environ["GEMINI_API_KEY"] = "mock_key_for_testing"
 os.environ["ANTHROPIC_API_KEY"] = "mock_key_for_testing"
 
 from unittest.mock import MagicMock, patch
@@ -46,17 +47,15 @@ def mock_tri_summary():
     )
 
 
-@patch("app.services.insights.Anthropic")
-def test_generate_triathlon_insights_success(mock_anthropic, mock_tri_summary):
-    # Mock the anthropic client response
-    mock_client = MagicMock()
-    mock_anthropic.return_value = mock_client
+@patch("app.services.insights.genai.Client")
+def test_generate_triathlon_insights_success(mock_client_class, mock_tri_summary):
+    # Mock the gemini client response
+    mock_client_instance = MagicMock()
+    mock_client_class.return_value = mock_client_instance
     
     mock_response = MagicMock()
-    mock_response.content = [
-        MagicMock(text='{"insights": ["Good volume this week.", "Bike focus."], "risks": ["No rest days.", "HR drift."], "recommendations": ["Take a rest day."]}')
-    ]
-    mock_client.messages.create.return_value = mock_response
+    mock_response.text = '{"insights": ["Good volume this week.", "Bike focus."], "risks": ["No rest days.", "HR drift."], "recommendations": ["Take a rest day."]}'
+    mock_client_instance.models.generate_content.return_value = mock_response
 
     report = generate_triathlon_insights(mock_tri_summary)
 
@@ -68,19 +67,19 @@ def test_generate_triathlon_insights_success(mock_anthropic, mock_tri_summary):
     assert len(report.recommendations) == 1
     
     # Verify the prompt contained our heuristic data
-    call_args = mock_client.messages.create.call_args[1]
-    prompt = call_args["messages"][0]["content"]
+    call_args = mock_client_instance.models.generate_content.call_args[1]
+    prompt = call_args["contents"][1]
     assert "600.0" in prompt
     assert "15.0" in prompt
     assert "NO_REST_DAYS_6" in prompt
 
 
-@patch("app.services.insights.Anthropic")
-def test_generate_triathlon_insights_fallback_on_api_error(mock_anthropic, mock_tri_summary):
-    from anthropic import APIError
-    
+@patch("app.services.insights.genai.Client")
+def test_generate_triathlon_insights_fallback_on_api_error(mock_client_class, mock_tri_summary):
     # Mock an API error
-    mock_anthropic.side_effect = APIError("API Error", MagicMock(), body=None)
+    mock_client_instance = MagicMock()
+    mock_client_class.return_value = mock_client_instance
+    mock_client_instance.models.generate_content.side_effect = Exception("API Error")
 
     report = generate_triathlon_insights(mock_tri_summary)
 

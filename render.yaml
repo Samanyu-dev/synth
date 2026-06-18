@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: synth-mvp
+    env: docker
+    plan: free
+    region: ohio
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false

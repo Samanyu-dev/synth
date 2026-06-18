@@ -1,11 +1,11 @@
 """
-Claude AI Synthesis Engine.
+Anthropic AI Synthesis Engine.
 
-Takes pre-computed heuristic summaries and uses Anthropic's Claude 3.5 Sonnet
+Takes pre-computed heuristic summaries and uses Claude 3.5 Sonnet
 to generate human-readable insights, risks, and recommendations.
 
 Features:
-- Strict JSON output forcing (using Claude's prompt capabilities).
+- Tool calling (JSON output forcing) to ensure valid responses.
 - Pydantic validation of the LLM response to prevent hallucination.
 - Graceful degradation: if the API fails, it returns a degraded InsightReport
   based purely on the deterministic heuristic alerts.
@@ -15,7 +15,7 @@ import json
 import logging
 from typing import Optional
 
-from anthropic import Anthropic, APIError, APITimeoutError
+import anthropic
 
 from app.config import get_settings
 from app.models.schemas import (
@@ -50,9 +50,8 @@ INSTRUCTIONS:
 2. Provide exactly 0 to 4 risks based on the load changes, lack of rest, or alerts.
 3. Provide exactly 1 to 5 actionable coaching recommendations.
 4. Keep each string under 200 characters. Be concise. Do not hallucinate data that is not provided above.
-5. Return ONLY a valid JSON object matching the requested schema. Do not wrap it in markdown blockquotes like ```json.
 """
-    return _call_claude(prompt, fallback_alerts=summary.active_alerts)
+    return _call_anthropic(prompt, fallback_alerts=summary.active_alerts)
 
 
 def generate_rowing_insights(summary: RowingTeamSummary) -> InsightReport:
@@ -78,62 +77,69 @@ INSTRUCTIONS:
 2. Provide exactly 0 to 4 risks based on the declining athletes, absences, or alerts.
 3. Provide exactly 1 to 5 actionable coaching recommendations for the team.
 4. Keep each string under 200 characters. Be concise. Do not hallucinate data that is not provided above.
-5. Return ONLY a valid JSON object matching the requested schema. Do not wrap it in markdown blockquotes like ```json.
 """
-    return _call_claude(prompt, fallback_alerts=summary.active_alerts)
+    return _call_anthropic(prompt, fallback_alerts=summary.active_alerts)
 
 
-def _call_claude(prompt: str, fallback_alerts: list[str]) -> InsightReport:
+def _call_anthropic(prompt: str, fallback_alerts: list[str]) -> InsightReport:
     """
     Execute the API call to Anthropic and parse the JSON response.
     Implements graceful fallback if the API call fails or times out.
     """
     settings = get_settings()
     
-    # Define the strict JSON schema we want Claude to return
-    # This is a powerful prompt engineering technique for deterministic JSON
-    json_schema = {
-        "insights": ["insight 1", "insight 2"],
-        "risks": ["risk 1"],
-        "recommendations": ["recommendation 1"]
-    }
-    
-    system_prompt = f"You are a strict JSON-only API. You output ONLY valid JSON matching this schema: {json.dumps(json_schema)}. Do not output any conversational text."
+    tools = [
+        {
+            "name": "generate_report",
+            "description": "Generate the structured insight report.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "insights": {
+                        "type": "array",
+                        "items": {"type": "string"}
+                    },
+                    "risks": {
+                        "type": "array",
+                        "items": {"type": "string"}
+                    },
+                    "recommendations": {
+                        "type": "array",
+                        "items": {"type": "string"}
+                    }
+                },
+                "required": ["insights", "risks", "recommendations"]
+            }
+        }
+    ]
 
     try:
-        client = Anthropic(api_key=settings.anthropic_api_key)
+        if not settings.anthropic_api_key:
+            raise ValueError("ANTHROPIC_API_KEY is not set.")
+
+        client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
         response = client.messages.create(
             model=settings.claude_model,
             max_tokens=settings.claude_max_tokens,
-            system=system_prompt,
+            temperature=0.2,
+            tools=tools,
+            tool_choice={"type": "tool", "name": "generate_report"},
             messages=[
                 {"role": "user", "content": prompt}
-            ],
-            temperature=0.2,  # Low temperature for more deterministic, factual output
+            ]
         )
         
-        # Parse the response
-        content = response.content[0].text.strip()
-        
-        # Sometimes models wrap JSON in markdown despite instructions
-        if content.startswith("```json"):
-            content = content[7:]
-        if content.startswith("```"):
-            content = content[3:]
-        if content.endswith("```"):
-            content = content[:-3]
-            
-        parsed_json = json.loads(content.strip())
-        
-        # Pydantic validation - this guarantees the schema matches our app's contract
-        return InsightReport.model_validate(parsed_json)
+        # Extract the tool use arguments
+        for block in response.content:
+            if block.type == 'tool_use' and block.name == 'generate_report':
+                parsed_json = block.input
+                return InsightReport.model_validate(parsed_json)
+                
+        raise ValueError("Claude did not return a tool_use block.")
 
-    except (APIError, APITimeoutError) as e:
-        logger.error(f"Claude API failed: {str(e)}")
+    except anthropic.APIError as e:
+        logger.error(f"Anthropic API failed: {str(e)}")
         return _fallback_report(fallback_alerts, error="AI service unavailable")
-    except json.JSONDecodeError as e:
-        logger.error(f"Claude returned invalid JSON: {str(e)} | Content: {content}")
-        return _fallback_report(fallback_alerts, error="AI format error")
     except Exception as e:
         logger.error(f"Validation or unexpected error in Claude synthesis: {str(e)}")
         return _fallback_report(fallback_alerts, error="AI validation error")
@@ -142,7 +148,6 @@ def _call_claude(prompt: str, fallback_alerts: list[str]) -> InsightReport:
 def _fallback_report(alerts: list[str], error: str) -> InsightReport:
     """
     Generate a degraded report purely from heuristics if the LLM fails.
-    This guarantees the system never goes completely down.
     """
     insights = [f"System running in degraded mode ({error})."]
     if alerts:
@@ -150,7 +155,7 @@ def _fallback_report(alerts: list[str], error: str) -> InsightReport:
     else:
         insights.append("Heuristics detected no immediate anomalies.")
         
-    risks = [f"ALERT: {alert}" for alert in alerts[:4]] # max 4 per schema
+    risks = [f"ALERT: {alert}" for alert in alerts[:4]] 
     
     recs = ["Review automated heuristic alerts.", "Try generating the report again later."]
     

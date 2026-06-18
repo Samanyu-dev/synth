@@ -36,8 +36,8 @@ For a full breakdown of why we chose LLM + Heuristics over a custom Machine Lear
 
 1. **CSV Ingestion (`app/ingestion/`)**: Pandas is used purely for robust CSV reading and NaN handling. Rows are immediately converted to Pydantic models (`DailySummary`, `ActivityRecord`, `ErgResult`).
 2. **Heuristics (`app/services/`)**: Pure Python functions calculate domain-specific metrics. For rowing, this means tracking an athlete's split progression and consistency. For triathlon, it means calculating TRIMP-inspired training loads.
-3. **Synthesis (`app/services/insights.py`)**: The `TriathlonWeeklySummary` and `RowingTeamSummary` objects are converted to a clean JSON representation and injected into a strict prompt for Anthropic's Claude 3.5 Sonnet.
-4. **Validation (`app/models/schemas.py`)**: Claude's response is parsed back into an `InsightReport` Pydantic model. If it hallucinates or breaks schema, it falls back gracefully to deterministic alert flags.
+3. **Synthesis (`app/services/insights.py`)**: The `TriathlonWeeklySummary` and `RowingTeamSummary` objects are converted to a clean JSON representation and injected into a strict prompt for Google's Gemini 1.5 Flash.
+4. **Validation (`app/models/schemas.py`)**: Gemini's response is requested as `application/json`. If it hallucinates, or if the API key fails/runs out of credits, it falls back gracefully to deterministic alert flags (Graceful Degradation).
 
 ## Project Structure
 
@@ -63,8 +63,12 @@ synth/
 ## Getting Started
 
 ### Prerequisites
-- Python 3.11+
-- Anthropic API Key
+- Python 3.10+
+- Gemini API Key (or Anthropic API Key)
+
+### Live Deployment
+The MVP is ready for one-click deployment to Render.
+**Live URL:** `https://synth-mvp.onrender.com` *(Requires GitHub connection)*
 
 ### Setup
 
@@ -101,7 +105,7 @@ pytest tests/
 ## Implementation Phases
 - **Phase 0:** Project scaffold, config, and design decisions. ✅
 - **Phase 1:** Data models and CSV ingestion pipelines. ✅
-- **Phase 2:** Heuristics engine (calculating loads, trends, progression). (Next)
-- **Phase 3:** Claude AI Synthesis engine.
-- **Phase 4:** API routes and security.
-- **Phase 5:** Final polish and integration tests.
+- **Phase 2:** Heuristics engine (calculating loads, trends, progression). ✅
+- **Phase 3:** Gemini AI Synthesis engine and Graceful Degradation. ✅
+- **Phase 4:** API routes, SlowAPI rate limiting, and Security (Prompt injection defense). ✅
+- **Phase 5:** Final polish, Dockerfile, render.yaml, and deployment prep. ✅

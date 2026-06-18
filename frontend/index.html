@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Synth MVP — Execution Tracer</title>
+    <meta name="description" content="Real-time pipeline execution tracer and AI reasoning inspector for Synth MVP.">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/vis-network@9.1.9/standalone/umd/vis-network.min.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <!-- ═══════════ METRICS BAR ═══════════ -->
+    <header id="metricsBar" class="metrics-bar hidden">
+        <div class="metric">
+            <span class="metric-label">Latency</span>
+            <span class="metric-value" id="metricLatency">—</span>
+        </div>
+        <div class="metric-divider"></div>
+        <div class="metric">
+            <span class="metric-label">Tokens</span>
+            <span class="metric-value" id="metricTokens">—</span>
+        </div>
+        <div class="metric-divider"></div>
+        <div class="metric">
+            <span class="metric-label">Warnings</span>
+            <span class="metric-value" id="metricWarnings">—</span>
+        </div>
+        <div class="metric-divider"></div>
+        <div class="metric">
+            <span class="metric-label">Nodes</span>
+            <span class="metric-value" id="metricNodes">—</span>
+        </div>
+        <div class="metric-divider"></div>
+        <div class="metric">
+            <span class="metric-label">Status</span>
+            <span class="metric-value" id="metricStatus">—</span>
+        </div>
+    </header>
+
+    <!-- ═══════════ VIEW TOGGLE ═══════════ -->
+    <div id="viewToggle" class="view-toggle hidden">
+        <button class="toggle-btn active" data-view="graph">Graph</button>
+        <button class="toggle-btn" data-view="timeline">Timeline</button>
+    </div>
+
+    <!-- ═══════════ FULL-SCREEN GRAPH ═══════════ -->
+    <div id="megaGraph"></div>
+
+    <!-- ═══════════ TIMELINE VIEW ═══════════ -->
+    <div id="timelineView" class="timeline-view hidden">
+        <div class="timeline-header">
+            <h3>Execution Timeline</h3>
+        </div>
+        <div class="timeline-list" id="timelineList"></div>
+    </div>
+
+    <!-- ═══════════ FLOATING SIDEBAR ═══════════ -->
+    <aside class="sidebar" id="sidebar">
+        <div class="brand">
+            <div class="logo-orb"></div>
+            <span class="brand-text">Synth</span>
+            <span class="brand-version">v0.1</span>
+        </div>
+        <div class="sidebar-controls">
+            <div class="input-group">
+                <label>Operation</label>
+                <select id="modeSelect">
+                    <option value="triathlon">triathlon.analyze()</option>
+                    <option value="rowing">rowing.analyze()</option>
+                </select>
+            </div>
+            <div class="input-group" id="triathlonInputs">
+                <label>Lookback</label>
+                <input type="number" id="lookbackDays" value="7" min="1" max="90" placeholder="days">
+            </div>
+            <div class="input-group" id="rowingInputs" style="display:none;">
+                <label>Athlete</label>
+                <input type="text" id="athleteName" value="Wheeler, Ella">
+            </div>
+            <button id="executeBtn" class="btn-execute">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                <span class="btn-text">Trace Execution</span>
+                <div class="loader" id="btnLoader"></div>
+            </button>
+        </div>
+        <div class="sidebar-footer">
+            <span class="kbd">⌘K</span> Command Palette
+        </div>
+    </aside>
+
+    <!-- ═══════════ NODE INSPECTOR (Right Panel) ═══════════ -->
+    <div id="inspector" class="inspector hidden">
+        <div class="inspector-header">
+            <div class="inspector-title-row">
+                <div class="inspector-status" id="inspectorStatus"></div>
+                <h3 id="inspectorTitle">Node Inspector</h3>
+            </div>
+            <button class="inspector-close" id="inspectorClose">✕</button>
+        </div>
+        <div class="inspector-body" id="inspectorBody"></div>
+    </div>
+
+    <!-- ═══════════ MINIMAP ═══════════ -->
+    <div id="minimap" class="minimap hidden">
+        <canvas id="minimapCanvas" width="180" height="120"></canvas>
+        <div id="minimapViewport" class="minimap-viewport"></div>
+    </div>
+
+    <!-- ═══════════ COMMAND PALETTE ═══════════ -->
+    <div id="cmdPalette" class="cmd-palette hidden">
+        <div class="cmd-backdrop"></div>
+        <div class="cmd-modal">
+            <input type="text" id="cmdInput" class="cmd-input" placeholder="Type a command…">
+            <div class="cmd-list" id="cmdList"></div>
+        </div>
+    </div>
+
+    <!-- ═══════════ EXPLAIN TOOLTIP ═══════════ -->
+    <div id="explainTooltip" class="explain-tooltip hidden">
+        <div class="explain-header">
+            <span class="explain-icon">💡</span>
+            <span>Why?</span>
+        </div>
+        <div class="explain-body" id="explainBody"></div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

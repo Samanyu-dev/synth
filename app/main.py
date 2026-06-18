@@ -1,39 +1,27 @@
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from fastapi.staticfiles import StaticFiles
+from app.api.routes import router
 import logging
 
-from app.api.routes import router
-
-# Configure application-level logging
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s"
 )
-logger = logging.getLogger("synth")
+
+limiter = Limiter(key_func=get_remote_address)
 
 app = FastAPI(
-    title="Synth MVP API",
-    description="Backend data pipeline for athletic heuristics and AI synthesis.",
-    version="1.0.0"
+    title="Synth MVP",
+    description="Training load and erg performance synthesis",
+    version="0.1.0"
 )
 
-# Standard CORS setup for modern web backends
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Allows all origins for MVP. In prod, restrict this.
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Include our core routes
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.include_router(router)
 
-@app.get("/health")
-def health_check():
-    """Basic health check endpoint for monitoring uptime."""
-    return {"status": "ok", "service": "synth-backend"}
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)
+# Serve the frontend UI
+app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
