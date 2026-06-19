@@ -14,49 +14,29 @@ HISTORY_DB = [
     "Athletes tapering for May races typically perform best when their peak volume is hit in the second week of April, followed by a 30% volume reduction."
 ]
 
-_embeddings_cache = None
+import re
 
-def get_history_embeddings(client):
-    global _embeddings_cache
-    if _embeddings_cache is not None:
-        return _embeddings_cache
-    
-    # Generate embeddings for our mock DB
-    response = client.models.embed_content(
-        model="text-embedding-004",
-        contents=HISTORY_DB
-    )
-    _embeddings_cache = [emb.values for emb in response.embeddings]
-    return _embeddings_cache
+def _tokenize(text: str) -> set:
+    # simple lowercase alphanumeric tokenization
+    return set(re.findall(r'\b\w+\b', text.lower()))
 
 def query_historical_context(query: str, top_k: int = 2) -> str:
-    """Query the vector database for relevant historical coaching context."""
-    settings = get_settings()
-    if not settings.gemini_api_key:
-        return ""
-        
+    """Query the vector database for relevant historical coaching context using local keyword matching."""
     try:
-        client = genai.Client(api_key=settings.gemini_api_key)
+        query_tokens = _tokenize(query)
         
-        # Get query embedding
-        query_response = client.models.embed_content(
-            model="text-embedding-004",
-            contents=query
-        )
-        query_embedding = np.array(query_response.embeddings[0].values)
+        # Calculate overlap score
+        scores = []
+        for i, doc in enumerate(HISTORY_DB):
+            doc_tokens = _tokenize(doc)
+            overlap = len(query_tokens.intersection(doc_tokens))
+            scores.append((overlap, i))
+            
+        # Sort descending by score
+        scores.sort(reverse=True)
         
-        # Get DB embeddings
-        db_embeddings = np.array(get_history_embeddings(client))
-        
-        # Calculate cosine similarity
-        similarities = np.dot(db_embeddings, query_embedding) / (
-            np.linalg.norm(db_embeddings, axis=1) * np.linalg.norm(query_embedding)
-        )
-        
-        # Get top k indices
-        top_indices = np.argsort(similarities)[-top_k:][::-1]
-        
-        results = [HISTORY_DB[i] for i in top_indices if similarities[i] > 0.4]
+        # Filter top_k with at least 1 keyword match
+        results = [HISTORY_DB[i] for score, i in scores[:top_k] if score > 0]
         
         if not results:
             return ""

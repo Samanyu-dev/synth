@@ -448,6 +448,9 @@ function addDataTree(parentNodeId, obj, level) {
         const nodeId = idCounter++;
 
         if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+            if (key === 'form_chart_data' || key === 'heatmap_data') {
+                continue; // Do not expand large chart objects into the graph
+            }
             // Object: create a group label, then recurse
             const childCount = Object.keys(value).length;
             let borderColor = COLORS.data.border;
@@ -463,6 +466,9 @@ function addDataTree(parentNodeId, obj, level) {
             addDataTree(nodeId, value, level + 1);
 
         } else if (Array.isArray(value)) {
+            if (key === 'form_chart_data' || key === 'heatmap_data') {
+                continue; // Do not expand large chart arrays into the graph
+            }
             let isAlertArr = (key === 'alerts' || key === 'risks' || key === 'active_alerts');
             let isInsightArr = (key === 'insights');
             let isRecArr = (key === 'recommendations');
