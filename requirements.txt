@@ -12,6 +12,10 @@ gspread==6.1.4
 # AI
 google-genai==0.3.0
 
+# Machine Learning
+xgboost==2.1.3
+scikit-learn==1.6.0
+
 # Security
 slowapi==0.1.9
 requests-oauthlib==2.0.0

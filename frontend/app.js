@@ -21,9 +21,10 @@ const EXEC_STEPS_ANALYZE = [
     { id: 3, label: 'Pydantic\n━━━━━━━━━━\nSchema + Sanitize',               cat: 'validation',  latency: 8,   desc: 'Strict Pydantic validation & regex injection defense.' },
     { id: 4, label: 'Data Ingestion\n━━━━━━━━━━\nCSV → Pandas → Models',      cat: 'processing',  latency: 45,  desc: 'Parses raw CSV files into strongly-typed Pydantic models.' },
     { id: 5, label: 'Heuristics\n━━━━━━━━━━\nTRIMP • Splits • Drift',        cat: 'processing',  latency: 22,  desc: 'Deterministic metric calculation: load, recovery proxy, HR drift.' },
-    { id: 6, label: 'AI Synthesis\n━━━━━━━━━━\nGemini 2.5 Flash',             cat: 'ai',          latency: 320, desc: 'Structured prompt sent to Google AI for insight generation.' },
-    { id: 7, label: 'Schema Enforcer\n━━━━━━━━━━\nJSON validate/fallback',    cat: 'validation',  latency: 5,   desc: 'Validates AI response or triggers Graceful Degradation fallback.' },
-    { id: 8, label: '200 OK\n━━━━━━━━━━\nPayload ready',                      cat: 'output',      latency: 2,   desc: 'Final JSON response returned to the client.' }
+    { id: 6, label: 'Machine Learning\n━━━━━━━━━━\nXGBoost Injury Model',     cat: 'processing',  latency: 15,  desc: 'Evaluates heuristics against historical data to predict injury probability.' },
+    { id: 7, label: 'AI Synthesis\n━━━━━━━━━━\nGemini 2.5 Flash',             cat: 'ai',          latency: 320, desc: 'Structured prompt sent to Google AI for insight generation.' },
+    { id: 8, label: 'Schema Enforcer\n━━━━━━━━━━\nJSON validate/fallback',    cat: 'validation',  latency: 5,   desc: 'Validates AI response or triggers Graceful Degradation fallback.' },
+    { id: 9, label: '200 OK\n━━━━━━━━━━\nPayload ready',                      cat: 'output',      latency: 2,   desc: 'Final JSON response returned to the client.' }
 ];
 
 const EXEC_STEPS_STRAVA = [
@@ -61,7 +62,8 @@ const ALERT_EXPLANATIONS = {
     'TEAM_WIDE_FATIGUE_POSSIBLE': 'More than 20% of the team is showing declining performance trends. Suggests systemic overtraining.',
     'PERFORMANCE_DECLINE': 'Split times are trending slower across recent tests compared to earlier season benchmarks.',
     'CHRONIC_ABSENCE': 'Athlete has been absent from 3+ test sessions. Pattern suggests ongoing issue requiring attention.',
-    'ERRATIC_PACING': 'Standard deviation of interval splits exceeds 5 seconds. Athlete struggles to maintain consistent pace.'
+    'ERRATIC_PACING': 'Standard deviation of interval splits exceeds 5 seconds. Athlete struggles to maintain consistent pace.',
+    'HIGH_PREDICTIVE_INJURY_RISK': 'XGBoost model predicts >70% chance of injury in the next 14 days based on compounding fatigue markers.'
 };
 
 // ─── 2. DOM REFS ───────────────────────────────────────
@@ -467,12 +469,14 @@ async function runTrace(mode, body) {
         });
         
         if (mode === 'triathlon' || mode === 'rowing') {
-            if (step.id === 5 || step.id === 6) {
+            if (step.id === 5 || step.id === 7) {
                 edges.add({ from: 4, to: step.id, color: { color: '#1e2030' }, arrows: 'to' });
-            } else if (step.id === 7) {
-                edges.add({ from: 5, to: 7, color: { color: '#1e2030' }, arrows: 'to' });
-                edges.add({ from: 6, to: 7, color: { color: '#1e2030' }, arrows: 'to' });
-            } else if (step.id > 1 && step.id !== 5 && step.id !== 6) {
+            } else if (step.id === 6) {
+                edges.add({ from: 5, to: 6, color: { color: '#1e2030' }, arrows: 'to' });
+            } else if (step.id === 8) {
+                edges.add({ from: 6, to: 8, color: { color: '#1e2030' }, arrows: 'to' });
+                edges.add({ from: 7, to: 8, color: { color: '#1e2030' }, arrows: 'to' });
+            } else if (step.id > 1 && step.id !== 5 && step.id !== 6 && step.id !== 7 && step.id !== 8) {
                 edges.add({ from: step.id - 1, to: step.id, color: { color: '#1e2030' }, arrows: 'to' });
             }
         } else {
@@ -542,7 +546,7 @@ async function runTrace(mode, body) {
     edges.forEach(e => edges.update({ id: e.id, width: 1.5 }));
 
     // Build fully expanded data tree
-    addDataTree(8, responseData, 9);
+    addDataTree(9, responseData, 10);
 
     await sleep(200);
     network.fit({ animation: { duration: 1200, easingFunction: 'easeInOutQuad' } });

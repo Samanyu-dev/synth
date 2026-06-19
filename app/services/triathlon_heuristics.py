@@ -15,8 +15,19 @@ from __future__ import annotations
 
 from datetime import date
 from typing import List
+import os
+import numpy as np
+import xgboost as xgb
 
 from app.models.schemas import ActivityRecord, DailySummary, TriathlonWeeklySummary
+
+# Load XGBoost Model
+MODEL_PATH = os.path.join(os.path.dirname(__file__), "..", "models", "xgboost_injury_model.json")
+try:
+    xgb_model = xgb.XGBClassifier()
+    xgb_model.load_model(MODEL_PATH)
+except Exception:
+    xgb_model = None
 
 
 def build_triathlon_summary(
@@ -82,6 +93,16 @@ def build_triathlon_summary(
     hr_drift_pct = ((avg_hr - baseline_hr) / baseline_hr * 100) if baseline_hr > 0 else 0.0
     recovery_proxy = _calculate_recovery_proxy(days_since_rest, hr_drift_pct, load_change_pct)
 
+    # ML Predictive Injury Risk
+    injury_risk_pct = 0.0
+    if xgb_model is not None:
+        try:
+            features = np.array([[load_change_pct, days_since_rest, hr_drift_pct, recovery_proxy]])
+            prob = xgb_model.predict_proba(features)[0][1]
+            injury_risk_pct = round(float(prob) * 100, 1)
+        except Exception:
+            pass
+
     # Alerts
     alerts = _generate_alerts(
         weekly_load=weekly_load,
@@ -89,6 +110,7 @@ def build_triathlon_summary(
         days_since_rest=days_since_rest,
         hr_drift_pct=hr_drift_pct,
         recovery_proxy=recovery_proxy,
+        injury_risk_pct=injury_risk_pct,
     )
 
     return TriathlonWeeklySummary(
@@ -114,6 +136,7 @@ def build_triathlon_summary(
         recovery_proxy=round(recovery_proxy, 2),
         days_since_rest=days_since_rest,
         hr_drift_pct=round(hr_drift_pct, 1),
+        injury_risk_pct=injury_risk_pct,
         active_alerts=alerts,
     )
 
@@ -183,6 +206,7 @@ def _generate_alerts(
     days_since_rest: int,
     hr_drift_pct: float,
     recovery_proxy: float,
+    injury_risk_pct: float = 0.0,
 ) -> List[str]:
     """Generate deterministic alert flags based on heuristic thresholds."""
     alerts = []
@@ -200,5 +224,8 @@ def _generate_alerts(
         
     if recovery_proxy < 0.4:
         alerts.append("POOR_RECOVERY_PROXY")
+        
+    if injury_risk_pct > 70.0:
+        alerts.append("HIGH_PREDICTIVE_INJURY_RISK")
         
     return alerts
