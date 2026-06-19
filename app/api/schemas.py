@@ -45,6 +45,7 @@ class LoadSummary(BaseModel):
     bike_miles: float
     swim_miles: float
     hr_trend: str
+    injury_risk_pct: Optional[float] = None
     alerts: List[str]
 
 class InsightsBlock(BaseModel):

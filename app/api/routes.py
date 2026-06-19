@@ -61,6 +61,7 @@ async def analyze_triathlon(request: Request, body: TriathlonRequest):
             bike_miles=summary.total_bike_miles,
             swim_miles=summary.total_swim_miles,
             hr_trend="improving_aerobic_fitness",  # stubbed since not in original heuristic
+            injury_risk_pct=summary.injury_risk_pct,
             alerts=summary.active_alerts
         )
         
