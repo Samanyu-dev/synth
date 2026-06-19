@@ -21,7 +21,7 @@ const EXEC_STEPS_ANALYZE = [
     { id: 3, label: 'Pydantic\n━━━━━━━━━━\nSchema + Sanitize',               cat: 'validation',  latency: 8,   desc: 'Strict Pydantic validation & regex injection defense.' },
     { id: 4, label: 'Data Ingestion\n━━━━━━━━━━\nCSV → Pandas → Models',      cat: 'processing',  latency: 45,  desc: 'Parses raw CSV files into strongly-typed Pydantic models.' },
     { id: 5, label: 'Heuristics\n━━━━━━━━━━\nTRIMP • Splits • Drift',        cat: 'processing',  latency: 22,  desc: 'Deterministic metric calculation: load, recovery proxy, HR drift.' },
-    { id: 6, label: 'AI Synthesis\n━━━━━━━━━━\nClaude 3.5 Sonnet',             cat: 'ai',          latency: 320, desc: 'Structured prompt sent to Anthropic AI for insight generation.' },
+    { id: 6, label: 'AI Synthesis\n━━━━━━━━━━\nGemini 2.5 Flash',             cat: 'ai',          latency: 320, desc: 'Structured prompt sent to Google AI for insight generation.' },
     { id: 7, label: 'Schema Enforcer\n━━━━━━━━━━\nJSON validate/fallback',    cat: 'validation',  latency: 5,   desc: 'Validates AI response or triggers Graceful Degradation fallback.' },
     { id: 8, label: '200 OK\n━━━━━━━━━━\nPayload ready',                      cat: 'output',      latency: 2,   desc: 'Final JSON response returned to the client.' }
 ];
@@ -215,7 +215,7 @@ function openInspector(nodeId) {
             html += `
             <div class="insp-section">
                 <div class="insp-section-title">AI Reasoning</div>
-                <div class="insp-kv"><span class="insp-key">Model</span><span class="insp-val purple">Gemini 1.5 Flash</span></div>
+                <div class="insp-kv"><span class="insp-key">Model</span><span class="insp-val purple">Gemini 2.5 Flash</span></div>
                 <div class="insp-kv"><span class="insp-key">Tokens (est)</span><span class="insp-val">~2,142</span></div>
                 <div class="insp-kv"><span class="insp-key">Cost (est)</span><span class="insp-val">$0.003</span></div>
                 <div class="insp-kv"><span class="insp-key">Response</span><span class="insp-val">application/json</span></div>

@@ -10,7 +10,7 @@ openpyxl==3.1.5
 gspread==6.1.4
 
 # AI
-anthropic==0.45.0
+google-genai==0.3.0
 
 # Security
 slowapi==0.1.9

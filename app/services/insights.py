@@ -1,11 +1,11 @@
 """
-Anthropic AI Synthesis Engine.
+Gemini AI Synthesis Engine.
 
-Takes pre-computed heuristic summaries and uses Claude 3.5 Sonnet
+Takes pre-computed heuristic summaries and uses Gemini 2.5 Flash
 to generate human-readable insights, risks, and recommendations.
 
 Features:
-- Tool calling (JSON output forcing) to ensure valid responses.
+- Structured Output to ensure valid JSON responses.
 - Pydantic validation of the LLM response to prevent hallucination.
 - Graceful degradation: if the API fails, it returns a degraded InsightReport
   based purely on the deterministic heuristic alerts.
@@ -15,7 +15,8 @@ import json
 import logging
 from typing import Optional
 
-import anthropic
+from google import genai
+from google.genai import types
 
 from app.config import get_settings
 from app.models.schemas import (
@@ -51,7 +52,7 @@ INSTRUCTIONS:
 3. Provide exactly 1 to 5 actionable coaching recommendations.
 4. Keep each string under 200 characters. Be concise. Do not hallucinate data that is not provided above.
 """
-    return _call_anthropic(prompt, fallback_alerts=summary.active_alerts)
+    return _call_gemini(prompt, fallback_alerts=summary.active_alerts)
 
 
 def generate_rowing_insights(summary: RowingTeamSummary) -> InsightReport:
@@ -78,71 +79,40 @@ INSTRUCTIONS:
 3. Provide exactly 1 to 5 actionable coaching recommendations for the team.
 4. Keep each string under 200 characters. Be concise. Do not hallucinate data that is not provided above.
 """
-    return _call_anthropic(prompt, fallback_alerts=summary.active_alerts)
+    return _call_gemini(prompt, fallback_alerts=summary.active_alerts)
 
 
-def _call_anthropic(prompt: str, fallback_alerts: list[str]) -> InsightReport:
+def _call_gemini(prompt: str, fallback_alerts: list[str]) -> InsightReport:
     """
-    Execute the API call to Anthropic and parse the JSON response.
+    Execute the API call to Gemini and parse the JSON response.
     Implements graceful fallback if the API call fails or times out.
     """
     settings = get_settings()
     
-    tools = [
-        {
-            "name": "generate_report",
-            "description": "Generate the structured insight report.",
-            "input_schema": {
-                "type": "object",
-                "properties": {
-                    "insights": {
-                        "type": "array",
-                        "items": {"type": "string"}
-                    },
-                    "risks": {
-                        "type": "array",
-                        "items": {"type": "string"}
-                    },
-                    "recommendations": {
-                        "type": "array",
-                        "items": {"type": "string"}
-                    }
-                },
-                "required": ["insights", "risks", "recommendations"]
-            }
-        }
-    ]
-
     try:
-        if not settings.anthropic_api_key:
-            raise ValueError("ANTHROPIC_API_KEY is not set.")
+        if not settings.gemini_api_key:
+            raise ValueError("GEMINI_API_KEY is not set.")
 
-        client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
-        response = client.messages.create(
-            model=settings.claude_model,
-            max_tokens=settings.claude_max_tokens,
-            temperature=0.2,
-            tools=tools,
-            tool_choice={"type": "tool", "name": "generate_report"},
-            messages=[
-                {"role": "user", "content": prompt}
-            ]
+        client = genai.Client(api_key=settings.gemini_api_key)
+        
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                response_schema=InsightReport,
+                temperature=0.2,
+            )
         )
         
-        # Extract the tool use arguments
-        for block in response.content:
-            if block.type == 'tool_use' and block.name == 'generate_report':
-                parsed_json = block.input
-                return InsightReport.model_validate(parsed_json)
-                
-        raise ValueError("Claude did not return a tool_use block.")
+        if hasattr(response, "parsed") and response.parsed:
+            return response.parsed
+        else:
+            return InsightReport.model_validate_json(response.text)
 
-    except anthropic.APIError as e:
-        logger.error(f"Anthropic API failed: {str(e)}")
-        return _fallback_report(fallback_alerts, error="AI service unavailable")
     except Exception as e:
-        logger.error(f"Validation or unexpected error in Claude synthesis: {str(e)}")
-        return _fallback_report(fallback_alerts, error="AI validation error")
+        logger.error(f"Gemini API or validation failed: {str(e)}")
+        return _fallback_report(fallback_alerts, error="AI service unavailable")
 
 
 def _fallback_report(alerts: list[str], error: str) -> InsightReport:
