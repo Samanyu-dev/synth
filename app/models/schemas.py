@@ -321,9 +321,9 @@ class InsightReport(BaseModel):
       - Validated with Pydantic before it reaches the API response
     """
 
-    insights: List[str] = Field(min_length=1, max_length=5)
-    risks: List[str] = Field(min_length=0, max_length=4)
-    recommendations: List[str] = Field(min_length=1, max_length=5)
+    insights: List[str]
+    risks: List[str]
+    recommendations: List[str]
 
     @field_validator("insights", "risks", "recommendations")
     @classmethod
