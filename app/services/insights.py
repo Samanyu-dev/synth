@@ -24,6 +24,7 @@ from app.models.schemas import (
     RowingTeamSummary,
     TriathlonWeeklySummary,
 )
+from app.services.rag import query_historical_context
 
 logger = logging.getLogger("synth.services.insights")
 
@@ -45,7 +46,15 @@ DATA:
 - Days Since Rest: {summary.days_since_rest}
 - Recovery Proxy Score: {summary.recovery_proxy} / 1.0
 - Deterministic Alerts: {', '.join(summary.active_alerts) if summary.active_alerts else 'None'}
+"""
+    
+    # RAG Injection
+    query = f"Triathlon training, {summary.period_days} days, load change {summary.load_change_pct}%, alerts: {', '.join(summary.active_alerts)}"
+    history = query_historical_context(query)
+    if history:
+        prompt += f"\nRELEVANT HISTORICAL CONTEXT (from past 5 years):\n{history}\n"
 
+    prompt += """
 INSTRUCTIONS:
 1. Provide exactly 1 to 5 factual, data-backed insights.
 2. Provide exactly 0 to 4 risks based on the load changes, lack of rest, or alerts.
@@ -72,7 +81,15 @@ DATA:
 - Top 2k Performers: {top_performers}
 - Highest Absence: {summary.highest_absence_name} ({summary.highest_absence_count} missed tests)
 - Deterministic Alerts: {', '.join(summary.active_alerts) if summary.active_alerts else 'None'}
+"""
+    
+    # RAG Injection
+    query = f"Rowing team progression, {summary.athletes_declining} declining, absences {summary.highest_absence_count}, alerts: {', '.join(summary.active_alerts)}"
+    history = query_historical_context(query)
+    if history:
+        prompt += f"\nRELEVANT HISTORICAL CONTEXT (from past 5 years):\n{history}\n"
 
+    prompt += """
 INSTRUCTIONS:
 1. Provide exactly 1 to 5 factual, data-backed insights focusing on team-wide trends.
 2. Provide exactly 0 to 4 risks based on the declining athletes, absences, or alerts.

@@ -47,6 +47,7 @@ class LoadSummary(BaseModel):
     hr_trend: str
     injury_risk_pct: Optional[float] = None
     alerts: List[str]
+    form_chart_data: List[dict] = []
 
 class InsightsBlock(BaseModel):
     insights: List[str]
@@ -76,6 +77,7 @@ class RowingResponse(BaseModel):
     date_range: Period
     performance_summary: PerformanceSummary
     insights: InsightsBlock
+    heatmap_data: dict = {}
 
 # Note: Health response is returned directly as dict per spec, but we can define it here too
 class HealthResponse(BaseModel):

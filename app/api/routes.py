@@ -62,7 +62,8 @@ async def analyze_triathlon(request: Request, body: TriathlonRequest):
             swim_miles=summary.total_swim_miles,
             hr_trend="improving_aerobic_fitness",  # stubbed since not in original heuristic
             injury_risk_pct=summary.injury_risk_pct,
-            alerts=summary.active_alerts
+            alerts=summary.active_alerts,
+            form_chart_data=summary.form_chart_data
         )
         
         result = TriathlonResponse(
@@ -133,7 +134,8 @@ async def analyze_rowing(request: Request, body: RowingRequest):
                 risks=report.risks,
                 recommendations=report.recommendations,
                 degraded=degraded_flag
-            )
+            ),
+            heatmap_data=summary.heatmap_data
         )
         
         logger.info(f"rowing analysis complete: best_split={result.performance_summary.best_split_secs} alerts={result.performance_summary.alerts}")

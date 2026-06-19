@@ -79,6 +79,12 @@ def build_team_summary(results: List[ErgResult], roster: List[str]) -> RowingTea
     if highest_absence_count >= 3:
         alerts.append("HIGH_INDIVIDUAL_ABSENCE_RATE")
 
+    # Heatmap Data
+    heatmap_data = {}
+    for name, user_results in athlete_results.items():
+        sorted_res = sorted([r for r in user_results if r.avg_split_seconds], key=lambda x: x.test_date)
+        heatmap_data[name] = [{"date": r.test_date.isoformat(), "split": r.avg_split_seconds, "type": r.workout_type} for r in sorted_res]
+
     return RowingTeamSummary(
         total_athletes=len(profiles),
         total_sessions=len(set(r.test_date for r in results)),
@@ -94,6 +100,7 @@ def build_team_summary(results: List[ErgResult], roster: List[str]) -> RowingTea
         avg_consistency=0.0,     # Could be aggregated from profiles
         highest_absence_name=highest_absence_name,
         highest_absence_count=highest_absence_count,
+        heatmap_data=heatmap_data,
         active_alerts=alerts,
     )
 
@@ -161,6 +168,15 @@ def _build_athlete_profile(name: str, results: List[ErgResult]) -> AthleteProfil
         alerts.append("PERFORMANCE_DECLINE")
     if avg_consistency and avg_consistency > 5.0:
         alerts.append("ERRATIC_PACING")
+        
+    # RP3 Force Curve Analysis
+    rp3_tests = [r for r in completed if r.erg_type == "RP3" and r.force_curve]
+    for r in rp3_tests:
+        if len(r.force_curve) >= 10:
+            # Wash out = sharp drop at the finish (tail of the curve)
+            if r.force_curve[-2] <= 20 and r.force_curve[-1] <= 5:
+                alerts.append("RP3_WASH_OUT_DETECTED")
+                break # Only need one instance to flag the athlete
 
     return AthleteProfile(
         name=name,

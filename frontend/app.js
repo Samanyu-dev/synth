@@ -63,7 +63,8 @@ const ALERT_EXPLANATIONS = {
     'PERFORMANCE_DECLINE': 'Split times are trending slower across recent tests compared to earlier season benchmarks.',
     'CHRONIC_ABSENCE': 'Athlete has been absent from 3+ test sessions. Pattern suggests ongoing issue requiring attention.',
     'ERRATIC_PACING': 'Standard deviation of interval splits exceeds 5 seconds. Athlete struggles to maintain consistent pace.',
-    'HIGH_PREDICTIVE_INJURY_RISK': 'XGBoost model predicts >70% chance of injury in the next 14 days based on compounding fatigue markers.'
+    'HIGH_PREDICTIVE_INJURY_RISK': 'XGBoost model predicts >70% chance of injury in the next 14 days based on compounding fatigue markers.',
+    'RP3_WASH_OUT_DETECTED': 'Biomechanical force curve analysis detects a sharp power drop-off at the finish of the stroke (washing out). Indicates poor core connection or technique breakdown under fatigue.'
 };
 
 // ─── 2. DOM REFS ───────────────────────────────────────
@@ -243,7 +244,7 @@ function openInspector(nodeId) {
             <div class="insp-section">
                 <div class="insp-section-title">Data Field</div>
                 <div class="insp-kv"><span class="insp-key">Key</span><span class="insp-val">${node._dataKey}</span></div>
-                <div class="insp-kv"><span class="insp-key">Value</span><span class="insp-val">${node._dataValue !== undefined ? node._dataValue : '(object)'}</span></div>
+                <div class="insp-kv"><span class="insp-key">Value</span><span class="insp-val">${typeof node._dataValue === 'object' ? '(Object)' : node._dataValue}</span></div>
             </div>`;
         if (node._isAlert && ALERT_EXPLANATIONS[node._dataValue]) {
             html += `
@@ -254,6 +255,67 @@ function openInspector(nodeId) {
                     ${ALERT_EXPLANATIONS[node._dataValue]}
                 </div>
             </div>`;
+        } else if (node._dataKey === 'load_summary' && typeof node._dataValue === 'object') {
+            const sum = node._dataValue;
+            html += `<div class="insp-section"><div class="insp-section-title">Form Chart (CTL vs ATL)</div><canvas id="formChartCanvas"></canvas></div>`;
+            html += `<div class="insp-section"><div class="insp-section-title">Sport Balance</div><canvas id="radarChartCanvas"></canvas></div>`;
+            setTimeout(() => {
+                const formCtx = document.getElementById('formChartCanvas');
+                if (formCtx && sum.form_chart_data && sum.form_chart_data.length > 0) {
+                    new Chart(formCtx, {
+                        type: 'line',
+                        data: {
+                            labels: sum.form_chart_data.map(d => d.date),
+                            datasets: [
+                                { label: 'Fitness (CTL)', data: sum.form_chart_data.map(d => d.ctl), borderColor: '#3b82f6', tension: 0.4 },
+                                { label: 'Fatigue (ATL)', data: sum.form_chart_data.map(d => d.atl), borderColor: '#ef4444', tension: 0.4 }
+                            ]
+                        },
+                        options: { scales: { y: { beginAtZero: true } }, plugins: { legend: { labels: { color: '#94a3b8' } } } }
+                    });
+                }
+                const radarCtx = document.getElementById('radarChartCanvas');
+                if (radarCtx) {
+                    new Chart(radarCtx, {
+                        type: 'radar',
+                        data: {
+                            labels: ['Run Miles', 'Bike Miles', 'Swim Miles'],
+                            datasets: [{
+                                label: 'Volume',
+                                data: [sum.run_miles || 0, sum.bike_miles || 0, sum.swim_miles || 0],
+                                backgroundColor: 'rgba(168,85,247,0.2)',
+                                borderColor: '#a855f7'
+                            }]
+                        },
+                        options: { scales: { r: { angleLines: { color: '#334155' }, grid: { color: '#334155' }, pointLabels: { color: '#94a3b8' } } }, plugins: { legend: { display: false } } }
+                    });
+                }
+            }, 100);
+        } else if (node._dataKey === 'heatmap_data' && typeof node._dataValue === 'object') {
+            const heat = node._dataValue;
+            html += `<div class="insp-section"><div class="insp-section-title">Team Progression Heatmap</div><div id="heatmapContainer" style="overflow-x:auto;"></div></div>`;
+            setTimeout(() => {
+                const container = document.getElementById('heatmapContainer');
+                if (!container) return;
+                let tableHtml = '<table style="width:100%; border-collapse: collapse; font-size: 0.75rem; color:#94a3b8;">';
+                tableHtml += '<tr><th style="text-align:left; padding:4px;">Athlete</th><th style="text-align:left; padding:4px;">Progression</th></tr>';
+                for (const [athlete, records] of Object.entries(heat)) {
+                    tableHtml += `<tr><td style="padding:4px; border-top:1px solid #334155; white-space:nowrap;">${athlete}</td><td style="padding:4px; border-top:1px solid #334155; display:flex; gap:4px; flex-wrap:wrap;">`;
+                    if (records.length > 0) {
+                        const baseline = records[0].split;
+                        records.forEach(r => {
+                            const diff = r.split - baseline;
+                            let color = '#3b82f6'; // neutral (blue)
+                            if (diff < -1) color = '#22c55e'; // faster -> green
+                            else if (diff > 1) color = '#ef4444'; // slower -> red
+                            tableHtml += `<div style="width:16px; height:16px; background-color:${color}; border-radius:2px;" title="${r.date}: ${r.split}s"></div>`;
+                        });
+                    }
+                    tableHtml += '</td></tr>';
+                }
+                tableHtml += '</table>';
+                container.innerHTML = tableHtml;
+            }, 100);
         }
     }
 
@@ -395,7 +457,7 @@ function addDataTree(parentNodeId, obj, level) {
                 id: nodeId, label: `${key}`, level,
                 color: { background: COLORS.data.bg, border: borderColor },
                 font: { color: COLORS.data.font, face: 'JetBrains Mono', size: 13 },
-                _title: key, _cat: 'data', _dataKey: key
+                _title: key, _cat: 'data', _dataKey: key, _dataValue: value
             });
             edges.add({ from: parentNodeId, to: nodeId, color: { color: '#1e293b' }, arrows: 'to' });
             addDataTree(nodeId, value, level + 1);

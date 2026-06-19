@@ -93,6 +93,9 @@ def build_triathlon_summary(
     hr_drift_pct = ((avg_hr - baseline_hr) / baseline_hr * 100) if baseline_hr > 0 else 0.0
     recovery_proxy = _calculate_recovery_proxy(days_since_rest, hr_drift_pct, load_change_pct)
 
+    # Form Chart Data (CTL vs ATL)
+    form_chart_data = _calculate_form_chart(prev_daily, current_daily) if prev_daily else []
+
     # ML Predictive Injury Risk
     injury_risk_pct = 0.0
     if xgb_model is not None:
@@ -138,6 +141,7 @@ def build_triathlon_summary(
         hr_drift_pct=round(hr_drift_pct, 1),
         injury_risk_pct=injury_risk_pct,
         active_alerts=alerts,
+        form_chart_data=form_chart_data,
     )
 
 
@@ -156,6 +160,24 @@ def _calculate_load(daily_records: List[DailySummary]) -> float:
         intensity_factor = (d.avg_hr_all / 150.0) if d.avg_hr_all else 0.8
         total_load += (d.training_minutes * intensity_factor)
     return total_load
+
+def _calculate_form_chart(all_records: List[DailySummary], current_records: List[DailySummary]) -> List[dict]:
+    chart_data = []
+    sorted_all = sorted(all_records, key=lambda x: x.date)
+    
+    for d in current_records:
+        past_42 = [r for r in sorted_all if 0 <= (d.date - r.date).days < 42]
+        past_7 = [r for r in sorted_all if 0 <= (d.date - r.date).days < 7]
+        
+        ctl = _calculate_load(past_42) / 42.0 if past_42 else 0.0
+        atl = _calculate_load(past_7) / 7.0 if past_7 else 0.0
+        
+        chart_data.append({
+            "date": d.date.isoformat(),
+            "ctl": round(ctl, 1),
+            "atl": round(atl, 1)
+        })
+    return chart_data
 
 
 def _calculate_days_since_rest(daily_records: List[DailySummary]) -> int:

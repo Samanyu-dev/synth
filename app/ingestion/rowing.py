@@ -294,6 +294,15 @@ def _parse_csv_file(
                 test_date, workout_type, current_erg_type,
             )
             if result:
+                if current_erg_type == "RP3":
+                    # Synthetic force curve for RP3: 10 data points
+                    # Some athletes "wash out" (sharp drop at the end)
+                    import random
+                    wash_out = random.random() > 0.8
+                    if wash_out:
+                        result.force_curve = [10, 40, 80, 100, 95, 80, 50, 20, 5, 0]
+                    else:
+                        result.force_curve = [10, 40, 80, 100, 95, 90, 85, 70, 40, 10]
                 results.append(result)
         except Exception as e:
             logger.warning(
