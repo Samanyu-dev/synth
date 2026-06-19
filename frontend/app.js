@@ -449,6 +449,13 @@ function addDataTree(parentNodeId, obj, level) {
 
         if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
             if (key === 'form_chart_data' || key === 'heatmap_data') {
+                nodes.add({
+                    id: nodeId, label: `${key}`, level,
+                    color: { background: COLORS.data.bg, border: COLORS.data.border },
+                    font: { color: COLORS.data.font, face: 'JetBrains Mono', size: 13 },
+                    _title: key, _cat: 'data', _dataKey: key, _dataValue: value
+                });
+                edges.add({ from: parentNodeId, to: nodeId, color: { color: '#1e293b' }, arrows: 'to' });
                 continue; // Do not expand large chart objects into the graph
             }
             // Object: create a group label, then recurse
@@ -467,6 +474,13 @@ function addDataTree(parentNodeId, obj, level) {
 
         } else if (Array.isArray(value)) {
             if (key === 'form_chart_data' || key === 'heatmap_data') {
+                nodes.add({
+                    id: nodeId, label: `${key}`, level,
+                    color: { background: COLORS.data.bg, border: COLORS.data.border },
+                    font: { color: COLORS.data.font, face: 'JetBrains Mono', size: 13 },
+                    _title: key, _cat: 'data', _dataKey: key, _dataValue: value
+                });
+                edges.add({ from: parentNodeId, to: nodeId, color: { color: '#1e293b' }, arrows: 'to' });
                 continue; // Do not expand large chart arrays into the graph
             }
             let isAlertArr = (key === 'alerts' || key === 'risks' || key === 'active_alerts');
@@ -484,7 +498,8 @@ function addDataTree(parentNodeId, obj, level) {
                 id: nodeId, label: `${key}`, level,
                 color: { background: bgColor, border: borderColor },
                 font: { color: fontColor, face: 'JetBrains Mono', size: 13 },
-                _title: key, _cat: isAlertArr ? 'error' : isInsightArr ? 'output' : isRecArr ? 'input' : 'data', _dataKey: key
+                _title: key, _cat: isAlertArr ? 'error' : isInsightArr ? 'output' : isRecArr ? 'input' : 'data', 
+                _dataKey: key, _dataValue: `Array(${value.length})`
             });
             edges.add({ from: parentNodeId, to: nodeId, color: { color: '#1e293b' }, arrows: 'to' });
 
