@@ -69,6 +69,8 @@
                 <select id="modeSelect">
                     <option value="triathlon">triathlon.analyze()</option>
                     <option value="rowing">rowing.analyze()</option>
+                    <option value="sync_strava">strava.sync()</option>
+                    <option value="sync_sheets">sheets.two_way_sync()</option>
                 </select>
             </div>
             <div class="input-group" id="triathlonInputs">
@@ -78,6 +80,18 @@
             <div class="input-group" id="rowingInputs" style="display:none;">
                 <label>Athlete</label>
                 <input type="text" id="athleteName" value="Wheeler, Ella">
+            </div>
+            <div class="input-group" id="stravaInputs" style="display:none;">
+                <label>Access Token</label>
+                <input type="text" id="stravaAccessToken" placeholder="Paste token here">
+                <a href="http://127.0.0.1:8000/strava/auth" target="_blank" style="font-size:0.75rem;color:var(--text-2);margin-top:4px;text-decoration:underline;">Get Token</a>
+            </div>
+            <div class="input-group" id="sheetsInputs" style="display:none;">
+                <label>Domain</label>
+                <select id="sheetsDomain">
+                    <option value="triathlon">Triathlon</option>
+                    <option value="rowing">Rowing</option>
+                </select>
             </div>
             <button id="executeBtn" class="btn-execute">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>

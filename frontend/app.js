@@ -15,16 +15,41 @@ const COLORS = {
     dimmed:     { bg: '#0a0b10', border: '#1e2030', font: '#3a3f52', glow: 'none' }
 };
 
-const EXEC_STEPS = [
+const EXEC_STEPS_ANALYZE = [
     { id: 1, label: 'API Gateway\n━━━━━━━━━━\nPOST /analyze',                cat: 'input',      latency: 12,  desc: 'Incoming HTTP request received by FastAPI server.' },
     { id: 2, label: 'Rate Limiter\n━━━━━━━━━━\nSlowAPI 10/min',               cat: 'validation',  latency: 3,   desc: 'SlowAPI checks IP against rate limit constraints.' },
     { id: 3, label: 'Pydantic\n━━━━━━━━━━\nSchema + Sanitize',               cat: 'validation',  latency: 8,   desc: 'Strict Pydantic validation & regex injection defense.' },
     { id: 4, label: 'Data Ingestion\n━━━━━━━━━━\nCSV → Pandas → Models',      cat: 'processing',  latency: 45,  desc: 'Parses raw CSV files into strongly-typed Pydantic models.' },
     { id: 5, label: 'Heuristics\n━━━━━━━━━━\nTRIMP • Splits • Drift',        cat: 'processing',  latency: 22,  desc: 'Deterministic metric calculation: load, recovery proxy, HR drift.' },
-    { id: 6, label: 'AI Synthesis\n━━━━━━━━━━\nGemini 1.5 Flash',             cat: 'ai',          latency: 320, desc: 'Structured prompt sent to Gemini AI for insight generation.' },
+    { id: 6, label: 'AI Synthesis\n━━━━━━━━━━\nClaude 3.5 Sonnet',             cat: 'ai',          latency: 320, desc: 'Structured prompt sent to Anthropic AI for insight generation.' },
     { id: 7, label: 'Schema Enforcer\n━━━━━━━━━━\nJSON validate/fallback',    cat: 'validation',  latency: 5,   desc: 'Validates AI response or triggers Graceful Degradation fallback.' },
     { id: 8, label: '200 OK\n━━━━━━━━━━\nPayload ready',                      cat: 'output',      latency: 2,   desc: 'Final JSON response returned to the client.' }
 ];
+
+const EXEC_STEPS_STRAVA = [
+    { id: 1, label: 'API Gateway\n━━━━━━━━━━\nPOST /sync/strava',             cat: 'input',      latency: 10,  desc: 'Incoming sync request.' },
+    { id: 2, label: 'OAuth2 Verification\n━━━━━━━━━━\nStrava Tokens',          cat: 'validation', latency: 15,  desc: 'Validates or refreshes the Strava Access Token.' },
+    { id: 3, label: 'Strava API\n━━━━━━━━━━\nGET /activities',                 cat: 'data',       latency: 410, desc: 'Pulls the athletes real workout data from Strava.' },
+    { id: 4, label: 'Pydantic Mapping\n━━━━━━━━━━\nStrava → ActivityRecord',   cat: 'processing', latency: 25,  desc: 'Normalizes Strava JSON payload into strict internal Pydantic schemas.' },
+    { id: 5, label: 'Google Sheets Write\n━━━━━━━━━━\ngspread Sync',           cat: 'output',     latency: 850, desc: 'Connects via Service Account to write the new activities to the spreadsheet.' },
+    { id: 6, label: '200 OK\n━━━━━━━━━━\nSynced Successfully',                 cat: 'output',      latency: 2,   desc: 'Returns the mapped activities and sync status.' }
+];
+
+const EXEC_STEPS_SHEETS = [
+    { id: 1, label: 'API Gateway\n━━━━━━━━━━\nPOST /sync/sheets',             cat: 'input',      latency: 12,  desc: 'Incoming sync request.' },
+    { id: 2, label: 'Service Account\n━━━━━━━━━━\nGoogle Auth',                cat: 'validation', latency: 45,  desc: 'Authenticates with Google Cloud via service account JSON.' },
+    { id: 3, label: 'Google Sheets API\n━━━━━━━━━━\nRead Worksheets',          cat: 'data',       latency: 600, desc: 'Fetches all raw training and wellness tabs from the live spreadsheet.' },
+    { id: 4, label: 'Heuristics Engine\n━━━━━━━━━━\nNormalization & Math',     cat: 'processing', latency: 35,  desc: 'Calculates acute load, heart rate drift, and recovery proxy scores.' },
+    { id: 5, label: 'AI Synthesis\n━━━━━━━━━━\nClaude Tool-Calling',           cat: 'ai',         latency: 1200,desc: 'Sends normalized data to Claude 3.5 Sonnet to generate structured JSON insights.' },
+    { id: 6, label: 'Google Sheets API\n━━━━━━━━━━\nWrite Insights Tab',       cat: 'output',     latency: 850, desc: 'Writes the AI-generated insights, risks, and recommendations back to the sheet.' },
+    { id: 7, label: '200 OK\n━━━━━━━━━━\nTwo-Way Sync Complete',               cat: 'output',     latency: 2,   desc: 'Sync loop finished.' }
+];
+
+function getSteps(mode) {
+    if (mode === 'sync_strava') return EXEC_STEPS_STRAVA;
+    if (mode === 'sync_sheets') return EXEC_STEPS_SHEETS;
+    return EXEC_STEPS_ANALYZE;
+}
 
 const ALERT_EXPLANATIONS = {
     'ACUTE_LOAD_SPIKE': 'Training load increased >30% compared to the previous period. This is a significant jump that raises injury risk.',
@@ -45,6 +70,8 @@ const megaGraph       = $('megaGraph');
 const modeSelect      = $('modeSelect');
 const triathlonInputs = $('triathlonInputs');
 const rowingInputs    = $('rowingInputs');
+const stravaInputs    = $('stravaInputs');
+const sheetsInputs    = $('sheetsInputs');
 const executeBtn      = $('executeBtn');
 const btnLoader       = $('btnLoader');
 const metricsBar      = $('metricsBar');
@@ -108,6 +135,8 @@ function countWarnings(data) {
 modeSelect.addEventListener('change', (e) => {
     triathlonInputs.style.display = e.target.value === 'triathlon' ? 'flex' : 'none';
     rowingInputs.style.display    = e.target.value === 'rowing'    ? 'flex' : 'none';
+    stravaInputs.style.display    = e.target.value === 'sync_strava' ? 'flex' : 'none';
+    sheetsInputs.style.display    = e.target.value === 'sync_sheets' ? 'flex' : 'none';
 });
 
 // ─── 6. METRICS BAR ───────────────────────────────────
@@ -425,57 +454,73 @@ async function runTrace(mode, body) {
     closeInspector();
     traceTimeline = [];
     totalLatency = 0;
+    
+    const steps = getSteps(mode);
 
     // Add all exec nodes dimmed
-    EXEC_STEPS.forEach(step => {
+    steps.forEach(step => {
         nodes.add({
             id: step.id, label: step.label, level: step.id,
             color: nodeColor(step.cat, 'dimmed'),
             font: nodeFont(step.cat, 'dimmed'),
             _title: step.label.split('\n')[0], _cat: step.cat, _execStep: step
         });
-        if (step.id === 5 || step.id === 6) {
-            edges.add({ from: 4, to: step.id, color: { color: '#1e2030' }, arrows: 'to' });
-        } else if (step.id === 7) {
-            edges.add({ from: 5, to: 7, color: { color: '#1e2030' }, arrows: 'to' });
-            edges.add({ from: 6, to: 7, color: { color: '#1e2030' }, arrows: 'to' });
-        } else if (step.id > 1 && step.id !== 5 && step.id !== 6) {
-            edges.add({ from: step.id - 1, to: step.id, color: { color: '#1e2030' }, arrows: 'to' });
+        
+        if (mode === 'triathlon' || mode === 'rowing') {
+            if (step.id === 5 || step.id === 6) {
+                edges.add({ from: 4, to: step.id, color: { color: '#1e2030' }, arrows: 'to' });
+            } else if (step.id === 7) {
+                edges.add({ from: 5, to: 7, color: { color: '#1e2030' }, arrows: 'to' });
+                edges.add({ from: 6, to: 7, color: { color: '#1e2030' }, arrows: 'to' });
+            } else if (step.id > 1 && step.id !== 5 && step.id !== 6) {
+                edges.add({ from: step.id - 1, to: step.id, color: { color: '#1e2030' }, arrows: 'to' });
+            }
+        } else {
+            // Linear flow for strava and sheets
+            if (step.id > 1) {
+                edges.add({ from: step.id - 1, to: step.id, color: { color: '#1e2030' }, arrows: 'to' });
+            }
         }
     });
-    idCounter = 9;
+    idCounter = 20;
 
     await sleep(300);
     network.fit({ animation: { duration: 500 } });
     await sleep(600);
 
     // Fire fetch concurrently
-    const fetchP = fetch(`/analyze/${mode}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-    }).then(async r => { const d = await r.json(); if (!r.ok) throw d; return d; });
+    let fetchUrl = `/analyze/${mode}`;
+    let fetchOpts = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
+    
+    if (mode === 'sync_strava') {
+        fetchUrl = `/sync/strava?access_token=${encodeURIComponent(body.access_token || '')}`;
+        fetchOpts = { method: 'POST' };
+    } else if (mode === 'sync_sheets') {
+        fetchUrl = `/sync/sheets?domain=${encodeURIComponent(body.domain || 'triathlon')}`;
+        fetchOpts = { method: 'POST' };
+    }
+
+    const fetchP = fetch(fetchUrl, fetchOpts).then(async r => { const d = await r.json(); if (!r.ok) throw d; return d; });
 
     // Animate through steps
-    for (const stepId of [1, 2, 3, 4, 5, 6, 7, 8]) {
-        const step = EXEC_STEPS.find(s => s.id === stepId);
+    for (const step of steps) {
         await sleep(500);
 
         // Highlight current, normalize previous
-        EXEC_STEPS.forEach(s => {
-            if (s.id === stepId) {
+        steps.forEach(s => {
+            if (s.id === step.id) {
                 nodes.update({ id: s.id, color: nodeColor(s.cat, 'active'), font: nodeFont(s.cat, 'active') });
-            } else if (s.id < stepId) {
+            } else if (s.id < step.id) {
                 nodes.update({ id: s.id, color: nodeColor(s.cat, 'normal'), font: nodeFont(s.cat, 'normal') });
             }
         });
 
         // Glow incoming edges
         edges.forEach(e => {
-            if (e.to === stepId) edges.update({ id: e.id, color: { color: COLORS[step.cat].border }, width: 3 });
+            if (e.to === step.id) edges.update({ id: e.id, color: { color: COLORS[step.cat].border }, width: 3 });
         });
 
-        network.focus(stepId, { scale: 1.1, animation: { duration: 350, easingFunction: 'easeInOutQuad' } });
+        network.focus(step.id, { scale: 1.1, animation: { duration: 350, easingFunction: 'easeInOutQuad' } });
 
         const ts = new Date();
         totalLatency += step.latency;
@@ -491,7 +536,7 @@ async function runTrace(mode, body) {
 
     // Normalize all
     await sleep(300);
-    EXEC_STEPS.forEach(s => {
+    steps.forEach(s => {
         nodes.update({ id: s.id, color: nodeColor(s.cat, 'normal'), font: nodeFont(s.cat, 'normal') });
     });
     edges.forEach(e => edges.update({ id: e.id, width: 1.5 }));
@@ -515,7 +560,9 @@ executeBtn.addEventListener('click', async () => {
     const mode = modeSelect.value;
     const body = {};
     if (mode === 'triathlon') body.lookback_days = parseInt(document.getElementById('lookbackDays').value) || 7;
-    else body.athlete = document.getElementById('athleteName').value;
+    else if (mode === 'rowing') body.athlete = document.getElementById('athleteName').value;
+    else if (mode === 'sync_strava') body.access_token = document.getElementById('stravaAccessToken').value;
+    else if (mode === 'sync_sheets') body.domain = document.getElementById('sheetsDomain').value;
 
     executeBtn.disabled = true;
     btnLoader.style.display = 'block';
