@@ -46,9 +46,20 @@ const EXEC_STEPS_SHEETS = [
     { id: 7, label: '200 OK\n━━━━━━━━━━\nTwo-Way Sync Complete',               cat: 'output',     latency: 2,   desc: 'Sync loop finished.' }
 ];
 
+const EXEC_STEPS_ML = [
+    { id: 1, label: 'API Gateway\n━━━━━━━━━━\nGET /analyze/ml_training',      cat: 'input',      latency: 5,   desc: 'Incoming request to initiate injury prediction model training pipeline.' },
+    { id: 2, label: 'Data Ingestion\n━━━━━━━━━━\nHistorical Load & Injuries', cat: 'data',       latency: 450, desc: 'Pulls 5 years of historical athlete training logs and logged injury events.' },
+    { id: 3, label: 'Feature Engineering\n━━━━━━━━━━\nAcute/Chronic & Drift',  cat: 'processing', latency: 850, desc: 'Calculates rolling averages, acute-to-chronic workload ratios, and HR drift percentages.' },
+    { id: 4, label: 'Model Training\n━━━━━━━━━━\nXGBoost Classifier',         cat: 'ml',         latency: 2100,desc: 'Trains Gradient Boosted Trees to predict injury probability within the next 14 days.' },
+    { id: 5, label: 'Model Evaluation\n━━━━━━━━━━\nPrecision / Recall',        cat: 'validation', latency: 150, desc: 'Evaluates the trained model against a holdout test set to determine F1 score.' },
+    { id: 6, label: 'Artifact Registry\n━━━━━━━━━━\nSave .pkl Model',          cat: 'output',     latency: 80,  desc: 'Saves the trained model weights and hyperparameter config to the registry.' },
+    { id: 7, label: '200 OK\n━━━━━━━━━━\nTraining Complete',                   cat: 'output',     latency: 2,   desc: 'Returns the training evaluation report.' }
+];
+
 function getSteps(mode) {
     if (mode === 'sync_strava') return EXEC_STEPS_STRAVA;
     if (mode === 'sync_sheets') return EXEC_STEPS_SHEETS;
+    if (mode === 'ml_training') return EXEC_STEPS_ML;
     return EXEC_STEPS_ANALYZE;
 }
 
@@ -65,6 +76,50 @@ const ALERT_EXPLANATIONS = {
     'ERRATIC_PACING': 'Standard deviation of interval splits exceeds 5 seconds. Athlete struggles to maintain consistent pace.',
     'HIGH_PREDICTIVE_INJURY_RISK': 'XGBoost model predicts >70% chance of injury in the next 14 days based on compounding fatigue markers.',
     'RP3_WASH_OUT_DETECTED': 'Biomechanical force curve analysis detects a sharp power drop-off at the finish of the stroke (washing out). Indicates poor core connection or technique breakdown under fatigue.'
+};
+
+const NODE_EXPLANATIONS = {
+    // Pipeline Steps
+    'API Gateway': 'The FastAPI entrypoint handles HTTP validation, routes requests, and manages background tasks. It enforces strict data payload schemas using Pydantic.',
+    'Rate Limiter': 'SlowAPI tracks IP addresses and blocks excessive requests (e.g., >10/minute) to protect against DDoS attacks and brute forcing.',
+    'Pydantic': 'Pydantic ensures the incoming JSON matches the expected types, stripping out unexpected fields and preventing injection attacks before data reaches the backend logic.',
+    'Data Ingestion': 'The ingestion layer loads historical records from local CSVs or Google Sheets, normalizes date formats, and maps raw strings to strict domain schemas.',
+    'Heuristics': 'The deterministic math engine. It calculates bounded variables like TRIMP (Training Impulse), Acute/Chronic workloads, and moving averages. This ensures AI doesn\'t hallucinate basic math.',
+    'Machine Learning': 'An XGBoost Gradient Boosted Classifier. It processes engineered features (like HR Drift and Acute Load) to output a probabilistic prediction of injury risk over the next 14 days.',
+    'AI Synthesis': 'Sends bounded, normalized heuristic data to Gemini 2.5 Flash / Claude 3.5 Sonnet to generate natural language coaching insights. Tool-calling ensures structured JSON output.',
+    'Schema Enforcer': 'Validates the LLM output. If the LLM hallucinates or fails, it triggers Graceful Degradation to return a heuristically-generated fallback payload.',
+    '200 OK': 'The final, fully validated and structured JSON payload is returned to the client dashboard for rendering.',
+    'Feature Engineering': 'Transforms raw load/HR metrics into predictive indicators (rolling averages, acute/chronic workload ratios, exponential decays) suitable for the ML training pipeline.',
+    'Model Training': 'An XGBoost Classifier trains on historical engineered features against known injury events (target variable) using Gradient Boosted Trees for high tabular performance.',
+    'Model Evaluation': 'Validates the newly trained model against a holdout validation set, checking precision, recall, and F1 scores to prevent overfitting.',
+    'Artifact Registry': 'Saves the optimized model weights (.pkl file) to the local registry for inference serving during runtime.',
+    'OAuth2 Verification': 'Validates Strava OAuth2 access tokens, automatically refreshing them if expired, ensuring secure API access.',
+    'Strava API': 'Pulls the athlete\'s raw activities, heart rate, and distance data directly from the Strava REST API.',
+    'Pydantic Mapping': 'Normalizes the wild-west Strava JSON payload into our strict internal ActivityRecord format.',
+    'Google Sheets Write': 'Connects to the Google Drive API via a headless Service Account to write mapped activities or AI insights directly back to a spreadsheet.',
+    'Service Account': 'Authenticates the server silently with Google Cloud using a secure JSON key, allowing automated background data syncs.',
+    'Google Sheets API': 'Fetches raw training arrays and wellness tabs directly from the user\'s live spreadsheet.',
+    
+    // Data Fields
+    'trimp': 'Training Impulse (TRIMP). A mathematical quantification of training load based on session duration, average heart rate, and maximum heart rate.',
+    'acute_load': 'Acute Training Load (ATL). An exponentially weighted moving average of the last 7 days of training. Represents short-term fatigue.',
+    'chronic_load': 'Chronic Training Load (CTL). An exponentially weighted moving average of the last 42 days of training. Represents long-term fitness.',
+    'form': 'Form (TSB). Calculated as CTL (Fitness) minus ATL (Fatigue). A positive number means the athlete is rested and peaking; negative means they are carrying fatigue.',
+    'hr_drift_pct': 'Heart Rate Drift (Cardiac Drift). The percentage increase in heart rate during a steady-state aerobic effort. A drift >5% indicates high aerobic fatigue or dehydration.',
+    'recovery_proxy': 'A synthesized metric (0 to 1.0) combining days since last rest, HR drift, and recent workload spikes. A score below 0.4 triggers a high-risk warning.',
+    'injury_risk_pct': 'The output of the XGBoost ML model. Represents the percentage probability that the athlete will sustain an overuse injury in the next 14 days.',
+    'alerts': 'Deterministic boolean triggers fired by the Heuristics Engine. These are strictly mathematical and do not rely on AI.',
+    'insights': 'LLM-generated observations based on the data. The AI synthesizes the metrics into readable coaching language.',
+    'risks': 'LLM-generated warnings. The AI correlates recent workload drops or spikes with historical context via RAG to predict negative outcomes.',
+    'recommendations': 'Actionable coaching steps. The AI suggests specific interventions (e.g., "Add 2 rest days", "Reduce intensity by 20%") based on the current load profile.',
+    'load_summary': 'An aggregated view of the athlete\'s training period, containing volume, intensity, and active alerts.',
+    'performance_summary': 'A team-wide aggregation of progression metrics, split times, and attendance.',
+    'heatmap_data': 'A grid representing every athlete\'s split time improvements or regressions across the entire season for visual boat selection.',
+    'form_chart_data': 'A 42-day rolling array of CTL (Fitness) and ATL (Fatigue) used to plot the athlete\'s peaking trajectory over time.',
+    'run_miles': 'Total miles run during the specified lookback period.',
+    'bike_miles': 'Total miles cycled during the specified lookback period.',
+    'swim_miles': 'Total miles swum during the specified lookback period.',
+    'degraded': 'Indicates if the LLM provider (Gemini/Claude) failed. If true, the response was gracefully degraded to use local heuristics instead of AI synthesis.'
 };
 
 // ─── 2. DOM REFS ───────────────────────────────────────
@@ -208,7 +263,19 @@ function openInspector(nodeId) {
             <div class="insp-section">
                 <div class="insp-section-title">Details</div>
                 <div style="font-size:0.85rem;color:var(--text-2);margin-top:4px;line-height:1.5;">${step.desc}</div>
-            </div>
+            </div>`;
+            
+        // Add detailed deep-dive explanation for the step
+        const stepKey = step.label.split('\\n')[0];
+        if (NODE_EXPLANATIONS[stepKey]) {
+            html += `
+            <div class="insp-section" style="background: rgba(59,130,246,0.1); border-left: 2px solid var(--blue); padding-left: 8px;">
+                <div class="insp-section-title" style="color:var(--blue); font-size: 0.75rem;">Deep Dive</div>
+                <div style="font-size:0.8rem;color:var(--text-1);line-height:1.5;">${NODE_EXPLANATIONS[stepKey]}</div>
+            </div>`;
+        }
+
+        html += `
             <div class="insp-section">
                 <div class="insp-section-title">Performance</div>
                 <div class="insp-kv"><span class="insp-key">Latency</span><span class="insp-val">${step.latency}ms</span></div>
@@ -218,7 +285,7 @@ function openInspector(nodeId) {
             html += `
             <div class="insp-section">
                 <div class="insp-section-title">AI Reasoning</div>
-                <div class="insp-kv"><span class="insp-key">Model</span><span class="insp-val purple">Gemini 2.5 Flash</span></div>
+                <div class="insp-kv"><span class="insp-key">Model</span><span class="insp-val purple">Gemini 2.5 Flash / Claude 3.5</span></div>
                 <div class="insp-kv"><span class="insp-key">Tokens (est)</span><span class="insp-val">~2,142</span></div>
                 <div class="insp-kv"><span class="insp-key">Cost (est)</span><span class="insp-val">$0.003</span></div>
                 <div class="insp-kv"><span class="insp-key">Response</span><span class="insp-val">application/json</span></div>
@@ -228,6 +295,7 @@ function openInspector(nodeId) {
                 <ul class="insp-list">
                     <li>Heuristic Summary (TriathlonWeeklySummary or RowingTeamSummary)</li>
                     <li>Computed alert flags from deterministic engine</li>
+                    <li>RAG Context injected from historical 5-year coaching database</li>
                 </ul>
             </div>
             <div class="insp-section">
@@ -246,6 +314,18 @@ function openInspector(nodeId) {
                 <div class="insp-kv"><span class="insp-key">Key</span><span class="insp-val">${node._dataKey}</span></div>
                 <div class="insp-kv"><span class="insp-key">Value</span><span class="insp-val">${typeof node._dataValue === 'object' ? '(Object)' : node._dataValue}</span></div>
             </div>`;
+            
+        // Check for node data key deep dive explanation
+        // Strip array brackets like 'insights[0]' -> 'insights'
+        const baseKey = node._dataKey.replace(/\\[\\d+\\]/g, '');
+        if (NODE_EXPLANATIONS[baseKey]) {
+            html += `
+            <div class="insp-section" style="background: rgba(34,197,94,0.1); border-left: 2px solid var(--green); padding-left: 8px;">
+                <div class="insp-section-title" style="color:var(--green); font-size: 0.75rem;">Under the Hood</div>
+                <div style="font-size:0.8rem;color:var(--text-1);line-height:1.5;">${NODE_EXPLANATIONS[baseKey]}</div>
+            </div>`;
+        }
+
         if (node._isAlert && ALERT_EXPLANATIONS[node._dataValue]) {
             html += `
             <div class="insp-section">
@@ -562,6 +642,11 @@ async function runTrace(mode, body) {
             } else if (step.id > 1 && step.id !== 5 && step.id !== 6 && step.id !== 7 && step.id !== 8) {
                 edges.add({ from: step.id - 1, to: step.id, color: { color: '#1e2030' }, arrows: 'to' });
             }
+        } else if (mode === 'ml_training') {
+            // Linear flow for ML pipeline
+            if (step.id > 1) {
+                edges.add({ from: step.id - 1, to: step.id, color: { color: '#1e2030' }, arrows: 'to' });
+            }
         } else {
             // Linear flow for strava and sheets
             if (step.id > 1) {
@@ -585,6 +670,9 @@ async function runTrace(mode, body) {
     } else if (mode === 'sync_sheets') {
         fetchUrl = `/sync/sheets?domain=${encodeURIComponent(body.domain || 'triathlon')}`;
         fetchOpts = { method: 'POST' };
+    } else if (mode === 'ml_training') {
+        fetchUrl = `/analyze/ml_training`;
+        fetchOpts = { method: 'GET' };
     }
 
     const fetchP = fetch(fetchUrl, fetchOpts).then(async r => { const d = await r.json(); if (!r.ok) throw d; return d; });

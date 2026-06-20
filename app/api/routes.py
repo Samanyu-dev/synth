@@ -333,5 +333,50 @@ async def sync_sheets(request: Request, domain: str = "triathlon"):
         }
 
     except Exception as e:
-        logger.error(f"Sheets sync failed: {e}")
-        raise HTTPException(status_code=502, detail={"detail": f"Sheets sync failed: {str(e)}"})
+        error_msg = str(e)
+        if "APIError" in type(e).__name__:
+            import json
+            try:
+                # e.response.text contains the actual Google API error JSON
+                error_data = e.response.json()
+                error_msg = error_data.get("error", {}).get("message", str(e))
+            except:
+                pass
+        
+        logger.error(f"Sheets sync failed: {error_msg}")
+        raise HTTPException(status_code=502, detail={"detail": f"Sheets sync failed: {error_msg}"})
+
+# ═══════════ ML TRAINING (MOCK) ═══════════
+
+@router.get("/analyze/ml_training")
+async def train_injury_model():
+    """
+    Simulates the data flow of an ML model training pipeline.
+    This provides a deterministic trace to visualize the ingestion,
+    feature engineering, and training steps.
+    """
+    from app.models.schemas import MLTrainingReport
+    
+    # In a real system, this would load the CSV, compute the features,
+    # split data, run XGBoost, and save the .pkl file.
+    
+    return MLTrainingReport(
+        model_name="Injury_Predictor_v1_XGB",
+        target_variable="injured_next_14_days",
+        ingestion_rows=1240,
+        ingestion_features=["date", "trimp", "avg_hr", "distance", "injury_status"],
+        engineered_features=["acute_load", "chronic_load", "acute_chronic_ratio", "hr_drift_pct", "days_since_rest"],
+        data_split="80% Train, 20% Test (Chronological)",
+        algorithm="XGBoost Classifier (n_estimators=100, learning_rate=0.05)",
+        hyperparameters={"max_depth": 4, "subsample": 0.8, "objective": "binary:logistic"},
+        accuracy_pct=89.4,
+        f1_score=0.82,
+        feature_importance={
+            "acute_chronic_ratio": 0.45,
+            "days_since_rest": 0.22,
+            "hr_drift_pct": 0.18,
+            "chronic_load": 0.15
+        },
+        model_artifact="models/injury_v1_xgb.pkl",
+        deployment_status="Staging (A/B Test)"
+    )

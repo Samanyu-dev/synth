@@ -129,7 +129,41 @@ def _call_gemini(prompt: str, fallback_alerts: list[str]) -> InsightReport:
 
     except Exception as e:
         logger.error(f"Gemini API or validation failed: {str(e)}")
-        return _fallback_report(fallback_alerts, error="AI service unavailable")
+        
+        # Fallback to Anthropic Claude if Gemini fails
+        if settings.anthropic_api_key:
+            logger.info("Attempting fallback to Anthropic Claude 3.5 Sonnet...")
+            try:
+                import anthropic
+                anthropic_client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+                
+                # Anthropic doesn't support the same strict JSON schema enforcing as Gemini out of the box easily,
+                # but we can instruct it to return raw JSON and parse it.
+                claude_prompt = prompt + "\n\nReturn ONLY a raw JSON object with keys: 'insights' (list of strings), 'risks' (list of strings), 'recommendations' (list of strings). No markdown formatting or extra text."
+                
+                message = anthropic_client.messages.create(
+                    model="claude-3-5-sonnet-20241022",
+                    max_tokens=1000,
+                    temperature=0.2,
+                    messages=[
+                        {"role": "user", "content": claude_prompt}
+                    ]
+                )
+                
+                response_text = message.content[0].text
+                # Clean up any potential markdown wrapper
+                if response_text.startswith("```json"):
+                    response_text = response_text[7:]
+                if response_text.endswith("```"):
+                    response_text = response_text[:-3]
+                    
+                return InsightReport.model_validate_json(response_text.strip())
+                
+            except Exception as claude_e:
+                logger.error(f"Claude fallback also failed: {str(claude_e)}")
+                return _fallback_report(fallback_alerts, error="Both AI services unavailable")
+                
+        return _fallback_report(fallback_alerts, error="Gemini API unavailable")
 
 
 def _fallback_report(alerts: list[str], error: str) -> InsightReport:

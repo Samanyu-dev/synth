@@ -362,3 +362,37 @@ class AnalysisResponse(BaseModel):
 
     # Fallback alerts (populated when degraded=True)
     fallback_alerts: List[str] = []
+
+# =============================================================================
+# ML TRAINING PIPELINE
+# =============================================================================
+
+class MLTrainingReport(BaseModel):
+    """
+    Simulated output of an ML pipeline training process.
+    Provides detailed insight into data ingestion, feature engineering,
+    training, and evaluation steps.
+    """
+    model_name: str
+    target_variable: str
+    
+    # 1. Ingestion
+    ingestion_rows: int
+    ingestion_features: List[str]
+    
+    # 2. Feature Engineering
+    engineered_features: List[str]
+    data_split: str
+    
+    # 3. Training
+    algorithm: str
+    hyperparameters: dict
+    
+    # 4. Evaluation
+    accuracy_pct: float
+    f1_score: float
+    feature_importance: dict
+    
+    # 5. Registry
+    model_artifact: str
+    deployment_status: str
