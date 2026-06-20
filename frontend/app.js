@@ -716,8 +716,9 @@ async function runTrace(mode, body) {
     });
     edges.forEach(e => edges.update({ id: e.id, width: 1.5 }));
 
-    // Build fully expanded data tree
-    addDataTree(9, responseData, 10);
+    // Build fully expanded data tree attached to the last execution node
+    const lastNodeId = steps[steps.length - 1].id;
+    addDataTree(lastNodeId, responseData, lastNodeId + 1);
 
     await sleep(200);
     network.fit({ animation: { duration: 1200, easingFunction: 'easeInOutQuad' } });
