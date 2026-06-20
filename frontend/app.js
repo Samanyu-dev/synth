@@ -12,7 +12,8 @@ const COLORS = {
     output:     { bg: '#052e16', border: '#22c55e', font: '#86efac', glow: 'rgba(34,197,94,0.5)' },
     error:      { bg: '#1f0a0a', border: '#ef4444', font: '#fca5a5', glow: 'rgba(239,68,68,0.5)' },
     data:       { bg: '#0f1219', border: '#334155', font: '#94a3b8', glow: 'none' },
-    dimmed:     { bg: '#0a0b10', border: '#1e2030', font: '#3a3f52', glow: 'none' }
+    dimmed:     { bg: '#0a0b10', border: '#1e2030', font: '#3a3f52', glow: 'none' },
+    ml:         { bg: '#1f1305', border: '#f97316', font: '#fdba74', glow: 'rgba(249,115,22,0.5)' }
 };
 
 const EXEC_STEPS_ANALYZE = [
