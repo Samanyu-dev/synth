@@ -79,6 +79,13 @@ The frontend included in this repository acts as an execution tracer. You can se
 
 ---
 
+## Live Deployment
+
+- **Production App:** [https://synth-mvp-production.up.railway.app](https://synth-mvp-production.up.railway.app)
+- **API Documentation:** [https://synth-mvp-production.up.railway.app/docs](https://synth-mvp-production.up.railway.app/docs)
+
+---
+
 ## Quick Start
 
 ### Prerequisites
@@ -92,7 +99,7 @@ The frontend included in this repository acts as an execution tracer. You can se
 
 1. **Clone the repository and enter the directory:**
    ```bash
-   git clone <repository_url>
+   git clone https://github.com/yourusername/synth-mvp.git
    cd synth
    ```
 
@@ -109,7 +116,7 @@ The frontend included in this repository acts as an execution tracer. You can se
    # Open .env and add your API keys and credentials
    ```
 
-### Running the Application
+### Running the Application Locally
 
 Start the FastAPI server:
 ```bash
@@ -119,6 +126,14 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 - **Frontend Visualizer:** `http://127.0.0.1:8000/`
 - **API Documentation:** `http://127.0.0.1:8000/docs`
 - **Strava Auth Flow:** `http://127.0.0.1:8000/strava/auth`
+
+### Deployment
+This application is fully containerized with Docker and can be deployed instantly to platforms like **Railway** or **Render**. 
+To deploy on Railway:
+1. Connect your GitHub repository to a new Railway project.
+2. Railway will automatically detect the `Dockerfile` and build the image.
+3. Inject your `.env` variables into the Railway Variables dashboard.
+4. Add the `PORT=8000` variable in Railway to correctly map the traffic.
 
 ---
 
