@@ -6,9 +6,7 @@ This project solves the problem of extracting meaningful coaching insights from 
 
 ## Demo
 
-<video src="synth_setup.mp4" controls="controls" muted="muted" style="max-width: 100%;">
-  Your browser does not support the video tag.
-</video>
+https://github.com/Samanyu-dev/synth/raw/main/synth_setup.mp4
 
 ## What's Inside?
 
