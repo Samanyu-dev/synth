@@ -256,7 +256,7 @@ async def sync_strava(request: Request, access_token: str = "", refresh_token: s
 
         # AI Heuristics + Synthesis
         from app.models.schemas import ActivityRecord
-        from app.services.triathlon_heuristics import analyze_triathlon_load
+        from app.services.triathlon_heuristics import build_triathlon_summary
         from app.services.insights import generate_triathlon_insights
         from datetime import datetime
         
@@ -270,7 +270,7 @@ async def sync_strava(request: Request, access_token: str = "", refresh_token: s
         ai_report = None
         load_summary = None
         if records:
-            summary = analyze_triathlon_load(records)
+            summary = build_triathlon_summary(records)
             ai_report = generate_triathlon_insights(summary)
             load_summary = summary.model_dump()
 

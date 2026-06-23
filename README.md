@@ -4,6 +4,12 @@ Synth is an advanced, production-ready backend pipeline and execution visualizat
 
 This project solves the problem of extracting meaningful coaching insights from messy, heterogeneous sports data. Rather than relying purely on an LLM to "figure out" a spreadsheet (which causes hallucinations and context window bloat), or building a custom ML model from scratch (which fails on small, unlabeled datasets), this architecture uses a **Heuristics + LLM Hybrid approach** alongside targeted ML prediction models.
 
+## Demo
+
+<video src="synth_setup.mp4" controls="controls" muted="muted" style="max-width: 100%;">
+  Your browser does not support the video tag.
+</video>
+
 ## What's Inside?
 
 ### External Features (What the User Sees)

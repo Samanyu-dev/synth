@@ -246,22 +246,23 @@ def insert_custom_record(sheet_id: str, payload: Dict, worksheet_name: str = "sy
             
         headers = list(payload.keys())
         
-        # If the sheet is completely empty, add the headers first
-        if not worksheet.get_all_values():
-            worksheet.append_row(headers)
-            
-        # Get headers from the first row to align data
+        # Get headers from the first row
         existing_headers = worksheet.row_values(1)
+        # Filter out empty strings that gspread might return for blank cells
+        existing_headers = [h for h in existing_headers if str(h).strip()]
         
-        # Build the row to insert, aligning with existing headers, or appending new ones
+        # If the sheet is completely empty (no valid headers), add the headers first
+        if not existing_headers:
+            worksheet.clear() # Clear out default blank cells
+            worksheet.append_row(headers)
+            existing_headers = headers
+            
+        # Build the row to insert, aligning with existing headers
         row_to_insert = []
         for h in existing_headers:
             row_to_insert.append(str(payload.get(h, "")))
             
-        # If the payload has keys not in the headers, we should theoretically add columns,
-        # but for simplicity, we just append whatever matches existing headers or add all if it's the first.
-        # Let's just append the row matching the keys in the payload to the end.
-        worksheet.append_row([str(payload.get(h, "")) for h in existing_headers])
+        worksheet.append_row(row_to_insert)
 
         logger.info(f"Appended custom record to '{worksheet_name}'")
         return True
