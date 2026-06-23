@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import HTMLResponse
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 import logging
@@ -167,14 +168,19 @@ async def health_check():
 # ═══════════ STRAVA OAUTH FLOW ═══════════
 
 @router.get("/strava/auth")
-async def strava_auth():
-    """Returns the Strava OAuth2 authorization URL. User clicks this to connect."""
+async def strava_auth(request: Request):
+    """Redirects the user to the Strava OAuth2 authorization URL."""
     from app.services.strava import get_auth_url
+    from fastapi.responses import RedirectResponse
     settings = get_settings()
     if not settings.strava_client_id:
         raise HTTPException(status_code=503, detail={"detail": "Strava not configured. Set STRAVA_CLIENT_ID and STRAVA_CLIENT_SECRET in .env"})
-    url = get_auth_url()
-    return {"auth_url": url, "instructions": "Open this URL in your browser to authorize Strava access."}
+    
+    # Dynamically build redirect_uri based on the incoming request to prevent cross-origin issues
+    base_url = str(request.base_url).rstrip('/')
+    redirect_uri = f"{base_url}/strava/callback"
+    url = get_auth_url(redirect_uri=redirect_uri)
+    return RedirectResponse(url=url)
 
 
 @router.get("/strava/callback")
@@ -188,14 +194,25 @@ async def strava_callback(code: str = "", error: str = ""):
     from app.services.strava import exchange_token
     try:
         token_data = exchange_token(code)
-        return {
-            "status": "connected",
-            "athlete": token_data.get("athlete", {}).get("firstname", "Unknown"),
-            "access_token": token_data["access_token"],
-            "refresh_token": token_data["refresh_token"],
-            "expires_at": token_data["expires_at"],
-            "instructions": "Save these tokens. Use access_token in POST /sync/strava to pull activities."
-        }
+        
+        html_content = f"""
+        <html>
+            <head><title>Strava Connected</title></head>
+            <body style="background:#0c1929; color:#fff; font-family:sans-serif; text-align:center; padding-top:50px;">
+                <h2>Strava Connected!</h2>
+                <p>Returning to application...</p>
+                <script>
+                    if (window.opener) {{
+                        window.opener.postMessage({{ type: 'STRAVA_AUTH_SUCCESS', token: '{token_data["access_token"]}' }}, '*');
+                        window.close();
+                    }} else {{
+                        document.body.innerHTML += '<p>Access Token: <b>{token_data["access_token"]}</b></p>';
+                    }}
+                </script>
+            </body>
+        </html>
+        """
+        return HTMLResponse(content=html_content)
     except Exception as e:
         logger.error(f"Strava token exchange failed: {e}")
         raise HTTPException(status_code=502, detail={"detail": f"Token exchange failed: {str(e)}"})
@@ -203,7 +220,7 @@ async def strava_callback(code: str = "", error: str = ""):
 
 @router.post("/sync/strava")
 @limiter.limit("10/minute")
-async def sync_strava(request: Request, access_token: str = "", refresh_token: str = ""):
+async def sync_strava(request: Request, access_token: str = "", refresh_token: str = "", sheet_id: str = ""):
     """
     Pull activities from Strava and map them to our internal format.
     
@@ -218,14 +235,14 @@ async def sync_strava(request: Request, access_token: str = "", refresh_token: s
     try:
         # Try fetching with current token
         try:
-            activities = get_activities(access_token, per_page=50)
+            activities = get_activities(access_token, per_page=100)
         except Exception:
             # If failed and we have refresh token, try refreshing
             if refresh_token:
                 logger.info("Access token expired, refreshing...")
                 new_tokens = refresh_access_token(refresh_token)
                 access_token = new_tokens["access_token"]
-                activities = get_activities(access_token, per_page=50)
+                activities = get_activities(access_token, per_page=100)
             else:
                 raise
 
@@ -237,12 +254,41 @@ async def sync_strava(request: Request, access_token: str = "", refresh_token: s
 
         mapped = map_strava_to_records(activities)
 
+        # AI Heuristics + Synthesis
+        from app.models.schemas import ActivityRecord
+        from app.services.triathlon_heuristics import analyze_triathlon_load
+        from app.services.insights import generate_triathlon_insights
+        from datetime import datetime
+        
+        records = []
+        for m in mapped:
+            try:
+                records.append(ActivityRecord(**m))
+            except Exception as e:
+                logger.warning(f"Skipping record due to schema error: {e}")
+                
+        ai_report = None
+        load_summary = None
+        if records:
+            summary = analyze_triathlon_load(records)
+            ai_report = generate_triathlon_insights(summary)
+            load_summary = summary.model_dump()
+
         # Optionally write to Google Sheet
         settings = get_settings()
+        target_sheet_id = sheet_id if sheet_id else settings.google_sheet_id
         sheet_written = False
-        if settings.google_sheet_id and (settings.google_service_account_json or settings.google_service_account_file):
-            from app.services.sheets import write_mapped_record
-            sheet_written = write_mapped_record(settings.google_sheet_id, mapped, "synth_strava_activities")
+        if target_sheet_id and (settings.google_service_account_json or settings.google_service_account_file):
+            from app.services.sheets import write_mapped_record, write_insights_to_sheet
+            sheet_written = write_mapped_record(target_sheet_id, mapped, "synth_strava_activities")
+            if ai_report:
+                write_insights_to_sheet(
+                    sheet_id=target_sheet_id,
+                    insights=ai_report.insights,
+                    risks=ai_report.risks,
+                    recommendations=ai_report.recommendations,
+                    metadata={"source": "strava", "generated_at": datetime.utcnow().isoformat()}
+                )
 
         return {
             "status": "synced",
@@ -251,7 +297,11 @@ async def sync_strava(request: Request, access_token: str = "", refresh_token: s
             "activities_mapped": len(mapped),
             "sheet_written": sheet_written,
             "activities": mapped[:10],  # Return first 10 for preview
-            "access_token": access_token  # Return in case it was refreshed
+            "access_token": access_token,
+            "load_summary": load_summary,
+            "insights": ai_report.insights if ai_report else [],
+            "risks": ai_report.risks if ai_report else [],
+            "recommendations": ai_report.recommendations if ai_report else []
         }
     except Exception as e:
         logger.error(f"Strava sync failed: {e}")
@@ -262,7 +312,7 @@ async def sync_strava(request: Request, access_token: str = "", refresh_token: s
 
 @router.post("/sync/sheets")
 @limiter.limit("10/minute")
-async def sync_sheets(request: Request, domain: str = "triathlon"):
+async def sync_sheets(request: Request, domain: str = "triathlon", sheet_id: str = None):
     """
     Full two-way sync: reads from Google Sheet, runs analysis, writes insights back.
     
@@ -272,15 +322,17 @@ async def sync_sheets(request: Request, domain: str = "triathlon"):
     3. Write insights back to a new tab in the same sheet
     """
     settings = get_settings()
-    if not settings.google_sheet_id:
-        raise HTTPException(status_code=503, detail={"detail": "Google Sheet not configured. Set GOOGLE_SHEET_ID in .env"})
+    target_sheet = sheet_id if sheet_id else settings.google_sheet_id
+    
+    if not target_sheet:
+        raise HTTPException(status_code=503, detail={"detail": "Google Sheet not configured. Set GOOGLE_SHEET_ID in .env or provide via UI"})
 
     from app.services.sheets import read_all_worksheets, write_insights_to_sheet, write_mapped_record
 
     try:
         # Step 1: Read from Google Sheet
-        logger.info(f"Reading from Google Sheet {settings.google_sheet_id}...")
-        all_tabs = read_all_worksheets(settings.google_sheet_id)
+        logger.info(f"Reading from Google Sheet {target_sheet}...")
+        all_tabs = read_all_worksheets(target_sheet)
         tab_names = list(all_tabs.keys())
         total_rows = sum(len(v) for v in all_tabs.values())
 
@@ -310,7 +362,7 @@ async def sync_sheets(request: Request, domain: str = "triathlon"):
         write_success = False
         if report:
             write_success = write_insights_to_sheet(
-                sheet_id=settings.google_sheet_id,
+                sheet_id=target_sheet,
                 insights=report.insights,
                 risks=report.risks,
                 recommendations=report.recommendations,
@@ -323,7 +375,7 @@ async def sync_sheets(request: Request, domain: str = "triathlon"):
 
         return {
             "status": "synced",
-            "sheet_id": settings.google_sheet_id,
+            "sheet_id": target_sheet,
             "tabs_read": tab_names,
             "total_rows_read": total_rows,
             "insights_written": write_success,
@@ -380,3 +432,36 @@ async def train_injury_model():
         model_artifact="models/injury_v1_xgb.pkl",
         deployment_status="Staging (A/B Test)"
     )
+
+
+# ═══════════ MANUAL DATA INSERTION ═══════════
+
+@router.post("/data/insert")
+@limiter.limit("20/minute")
+async def insert_manual_data(request: Request, sheet_id: str = ""):
+    """
+    Two-Way Sync: Inserts JSON data sent from the platform back into Google Sheets.
+    """
+    settings = get_settings()
+    target_sheet_id = sheet_id if sheet_id else settings.google_sheet_id
+    
+    if not target_sheet_id:
+        raise HTTPException(status_code=400, detail={"detail": "No Google Sheet ID provided or configured."})
+        
+    try:
+        payload = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail={"detail": "Invalid JSON payload."})
+        
+    from app.services.sheets import insert_custom_record
+    try:
+        success = insert_custom_record(target_sheet_id, payload, "synth_manual_entries")
+        return {
+            "status": "inserted",
+            "sheet_id": target_sheet_id,
+            "success": success,
+            "data": payload
+        }
+    except Exception as e:
+        logger.error(f"Manual insertion failed: {e}")
+        raise HTTPException(status_code=502, detail={"detail": f"Manual insertion failed: {str(e)}"})

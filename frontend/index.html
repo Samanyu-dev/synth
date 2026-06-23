@@ -72,6 +72,7 @@
                     <option value="rowing">rowing.analyze()</option>
                     <option value="sync_strava">strava.sync()</option>
                     <option value="sync_sheets">sheets.two_way_sync()</option>
+                    <option value="insert_record">sheets.insert_record()</option>
                     <option value="ml_training">ml.train_injury_model()</option>
                 </select>
             </div>
@@ -85,15 +86,29 @@
             </div>
             <div class="input-group" id="stravaInputs" style="display:none;">
                 <label>Access Token</label>
-                <input type="text" id="stravaAccessToken" placeholder="Paste token here">
-                <a href="http://127.0.0.1:8000/strava/auth" target="_blank" style="font-size:0.75rem;color:var(--text-2);margin-top:4px;text-decoration:underline;">Get Token</a>
+                <button id="connectStravaBtn" style="margin-bottom: 6px; padding: 6px; font-size: 0.8rem; background: rgba(252, 76, 2, 0.2); border: 1px solid #fc4c02; color: #fdba74; border-radius: 4px; cursor: pointer; text-align: center; width: 100%;">Connect Strava</button>
+                <input type="text" id="stravaAccessToken" placeholder="Auto-fills after connect">
+                <label style="margin-top: 8px;">Google Sheet ID (Optional)</label>
+                <input type="text" id="stravaSheetId" placeholder="Paste Sheet ID">
             </div>
             <div class="input-group" id="sheetsInputs" style="display:none;">
                 <label>Domain</label>
-                <select id="sheetsDomain">
+                <select id="sheetsDomain" style="margin-bottom: 8px;">
                     <option value="triathlon">Triathlon</option>
                     <option value="rowing">Rowing</option>
                 </select>
+                <label>Google Sheet ID (Optional)</label>
+                <input type="text" id="customSheetId" placeholder="Paste Sheet ID">
+            </div>
+            <div class="input-group" id="insertInputs" style="display:none;">
+                <label>JSON Payload</label>
+                <textarea id="insertPayload" rows="4" style="width:100%; background: rgba(0,0,0,0.2); border: 1px solid #334155; color: #e2e8f0; font-family: monospace; padding: 6px; font-size: 12px; border-radius: 4px; resize: vertical;">{
+  "activity": "Run",
+  "duration": "45m",
+  "notes": "Test manual entry"
+}</textarea>
+                <label style="margin-top: 8px;">Target Sheet ID (Optional)</label>
+                <input type="text" id="insertSheetId" placeholder="Paste Sheet ID">
             </div>
             <button id="executeBtn" class="btn-execute">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>

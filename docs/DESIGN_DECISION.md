@@ -16,7 +16,7 @@ Two options were evaluated:
 - **Volume**: 141 daily rows, 375 individual activities
 - **Time span**: Dec 25, 2025 → May 14, 2026 (~5 months)
 - **Populated fields**: Session counts, distances, training minutes, elevation, heart rate (96%), bike power (40%), run pace (44%)
-- **Missing fields**: All wellness columns are empty — sleep, HRV, resting HR, body weight (0% fill rate)
+- **Missing fields**: All wellness columns are empty   sleep, HRV, resting HR, body weight (0% fill rate)
 - **Labels**: None. No ground truth for "overtraining", "good recovery", or "optimal load."
 
 ### Rowing Erg Results
@@ -35,8 +35,8 @@ Two options were evaluated:
 
 ### How it works
 1. **Heuristics layer** computes deterministic metrics from the data:
-   - Training load (TRIMP-inspired: minutes × HR intensity factor)
-   - Recovery proxy (derived from rest day recency, HR drift, load trends — since wellness data is empty)
+   - Training load (TRIMP inspired: minutes × HR intensity factor)
+   - Recovery proxy (derived from rest day recency, HR drift, load trends   since wellness data is empty)
    - Sport balance (triathlon discipline distribution)
    - Athlete progression (split improvement over time for rowing)
    - Anomaly flags (training spikes, load changes, pacing inconsistency)
@@ -103,15 +103,15 @@ Two options were evaluated:
 
 **LLM + Heuristics**, for the reasons above.
 
-The system was intentionally designed around `daily_summary` and `activities_raw` because aggregate training and recovery metrics were sufficient for MVP insight generation. Split-level sheets (swim, bike, run splits) were identified as a future enhancement for interval-level analysis — including them would have dramatically increased parsing complexity, join complexity, and testing surface without materially improving the insight quality for this submission.
+The system was intentionally designed around `daily_summary` and `activities_raw` because aggregate training and recovery metrics were sufficient for MVP insight generation. Split level sheets (swim, bike, run splits) were identified as a future enhancement for interval level analysis   including them would have dramatically increased parsing complexity, join complexity, and testing surface without materially improving the insight quality for this submission.
 
 ## 7. Tradeoffs Acknowledged
 
 ### LLM hallucination risk
-**Mitigation**: The LLM never sees raw data. It receives pre-computed summaries with specific numbers. The response is validated by forcing `application/json` at the SDK level. If validation or the API call fails, the system catches the error and returns heuristic flags as degraded-mode insights.
+**Mitigation**: The LLM never sees raw data. It receives pre computed summaries with specific numbers. The response is validated by forcing `application/json` at the SDK level. If validation or the API call fails, the system catches the error and returns heuristic flags as degraded mode insights.
 
 ### Recovery proxy vs real wellness data
-**Mitigation**: The recovery proxy uses rest day recency (binary, reliable), HR drift (derived, moderately reliable), and load trend (computed, reliable). It's explicitly documented as a proxy, not a measurement. The schema is ready for real wellness data when it becomes available — adding sleep and HRV would improve the recovery score without changing the architecture.
+**Mitigation**: The recovery proxy uses rest day recency (binary, reliable), HR drift (derived, moderately reliable), and load trend (computed, reliable). It's explicitly documented as a proxy, not a measurement. The schema is ready for real wellness data when it becomes available   adding sleep and HRV would improve the recovery score without changing the architecture.
 
 ### Prompt injection from Excel data
 **Mitigation**: Only computed numeric summaries enter the Gemini prompt. Raw string fields from the spreadsheet (athlete names, notes) are strictly sanitized via regex before they ever hit the pipeline, throwing a 422 exception if malicious tags like `<script>` are detected. Alert flags are internally generated strings.
@@ -124,13 +124,13 @@ The system was intentionally designed around `daily_summary` and `activities_raw
 
 ### Phase 3 (with 500+ labeled records)
 - Explore anomaly detection (isolation forest) alongside heuristics
-- Time-series forecasting for rowing erg performance
+- Time series forecasting for rowing erg performance
 - Ensemble approach: heuristics provide the base, ML adds statistical power
 
 ### Phase 4 (production)
-- Split-level analysis for interval training optimisation
-- Multi-athlete support with per-athlete baselines
-- Real-time Strava webhook integration (replace Excel ingestion)
+- Split level analysis for interval training optimisation
+- Multi athlete support with per athlete baselines
+- Real time Strava webhook integration (replace Excel ingestion)
 - Background task queue for Gemini calls
 
 ---

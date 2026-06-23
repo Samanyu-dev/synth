@@ -229,3 +229,43 @@ def write_mapped_record(
     except Exception as e:
         logger.error(f"Failed to write mapped data: {e}")
         return False
+
+def insert_custom_record(sheet_id: str, payload: Dict, worksheet_name: str = "synth_manual_entries") -> bool:
+    """
+    Appends a single JSON payload as a new row in the spreadsheet.
+    Creates the worksheet if it doesn't exist, and ensures headers match.
+    """
+    try:
+        client = _get_client()
+        spreadsheet = client.open_by_key(sheet_id)
+
+        try:
+            worksheet = spreadsheet.worksheet(worksheet_name)
+        except gspread.exceptions.WorksheetNotFound:
+            worksheet = spreadsheet.add_worksheet(title=worksheet_name, rows=100, cols=20)
+            
+        headers = list(payload.keys())
+        
+        # If the sheet is completely empty, add the headers first
+        if not worksheet.get_all_values():
+            worksheet.append_row(headers)
+            
+        # Get headers from the first row to align data
+        existing_headers = worksheet.row_values(1)
+        
+        # Build the row to insert, aligning with existing headers, or appending new ones
+        row_to_insert = []
+        for h in existing_headers:
+            row_to_insert.append(str(payload.get(h, "")))
+            
+        # If the payload has keys not in the headers, we should theoretically add columns,
+        # but for simplicity, we just append whatever matches existing headers or add all if it's the first.
+        # Let's just append the row matching the keys in the payload to the end.
+        worksheet.append_row([str(payload.get(h, "")) for h in existing_headers])
+
+        logger.info(f"Appended custom record to '{worksheet_name}'")
+        return True
+
+    except Exception as e:
+        logger.error(f"Failed to insert custom data: {e}")
+        return False

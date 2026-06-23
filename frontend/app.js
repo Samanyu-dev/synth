@@ -33,8 +33,9 @@ const EXEC_STEPS_STRAVA = [
     { id: 2, label: 'OAuth2 Verification\n━━━━━━━━━━\nStrava Tokens',          cat: 'validation', latency: 15,  desc: 'Validates or refreshes the Strava Access Token.' },
     { id: 3, label: 'Strava API\n━━━━━━━━━━\nGET /activities',                 cat: 'data',       latency: 410, desc: 'Pulls the athletes real workout data from Strava.' },
     { id: 4, label: 'Pydantic Mapping\n━━━━━━━━━━\nStrava → ActivityRecord',   cat: 'processing', latency: 25,  desc: 'Normalizes Strava JSON payload into strict internal Pydantic schemas.' },
-    { id: 5, label: 'Google Sheets Write\n━━━━━━━━━━\ngspread Sync',           cat: 'output',     latency: 850, desc: 'Connects via Service Account to write the new activities to the spreadsheet.' },
-    { id: 6, label: '200 OK\n━━━━━━━━━━\nSynced Successfully',                 cat: 'output',      latency: 2,   desc: 'Returns the mapped activities and sync status.' }
+    { id: 5, label: 'AI Synthesis\n━━━━━━━━━━\nTriathlon Engine',              cat: 'output',     latency: 1250, desc: 'Evaluates acute load, rest proxies, and uses Gemini 2.5 to provide elite coaching insights.' },
+    { id: 6, label: 'Google Sheets Write\n━━━━━━━━━━\ngspread Sync',           cat: 'processing', latency: 850, desc: 'Connects via Service Account to write the new activities and insights to the spreadsheet.' },
+    { id: 7, label: '200 OK\n━━━━━━━━━━\nSynced Successfully',                 cat: 'output',     latency: 2,   desc: 'Returns the mapped activities and sync status.' }
 ];
 
 const EXEC_STEPS_SHEETS = [
@@ -45,6 +46,14 @@ const EXEC_STEPS_SHEETS = [
     { id: 5, label: 'AI Synthesis\n━━━━━━━━━━\nClaude Tool-Calling',           cat: 'ai',         latency: 1200,desc: 'Sends normalized data to Claude 3.5 Sonnet to generate structured JSON insights.' },
     { id: 6, label: 'Google Sheets API\n━━━━━━━━━━\nWrite Insights Tab',       cat: 'output',     latency: 850, desc: 'Writes the AI-generated insights, risks, and recommendations back to the sheet.' },
     { id: 7, label: '200 OK\n━━━━━━━━━━\nTwo-Way Sync Complete',               cat: 'output',     latency: 2,   desc: 'Sync loop finished.' }
+];
+
+const EXEC_STEPS_INSERT = [
+    { id: 1, label: 'API Gateway\n━━━━━━━━━━\nPOST /data/insert',             cat: 'input',      latency: 8,   desc: 'Incoming insert request from platform UI.' },
+    { id: 2, label: 'Pydantic\n━━━━━━━━━━\nPayload Validation',               cat: 'validation', latency: 4,   desc: 'Validates JSON payload to prevent injection.' },
+    { id: 3, label: 'Service Account\n━━━━━━━━━━\nGoogle Auth',                cat: 'validation', latency: 40,  desc: 'Authenticates with Google Cloud via service account JSON.' },
+    { id: 4, label: 'Google Sheets API\n━━━━━━━━━━\nWrite Row',                cat: 'processing', latency: 750, desc: 'Appends a new row to the sheet via two-way sync.' },
+    { id: 5, label: '200 OK\n━━━━━━━━━━\nInserted Successfully',               cat: 'output',     latency: 2,   desc: 'Returns success response.' }
 ];
 
 const EXEC_STEPS_ML = [
@@ -60,6 +69,7 @@ const EXEC_STEPS_ML = [
 function getSteps(mode) {
     if (mode === 'sync_strava') return EXEC_STEPS_STRAVA;
     if (mode === 'sync_sheets') return EXEC_STEPS_SHEETS;
+    if (mode === 'insert_record') return EXEC_STEPS_INSERT;
     if (mode === 'ml_training') return EXEC_STEPS_ML;
     return EXEC_STEPS_ANALYZE;
 }
@@ -130,7 +140,10 @@ const modeSelect      = $('modeSelect');
 const triathlonInputs = $('triathlonInputs');
 const rowingInputs    = $('rowingInputs');
 const stravaInputs    = $('stravaInputs');
+const connectStravaBtn = $('connectStravaBtn');
+const stravaAccessToken = $('stravaAccessToken');
 const sheetsInputs    = $('sheetsInputs');
+const customSheetId   = $('customSheetId');
 const executeBtn      = $('executeBtn');
 const btnLoader       = $('btnLoader');
 const metricsBar      = $('metricsBar');
@@ -196,6 +209,23 @@ modeSelect.addEventListener('change', (e) => {
     rowingInputs.style.display    = e.target.value === 'rowing'    ? 'flex' : 'none';
     stravaInputs.style.display    = e.target.value === 'sync_strava' ? 'flex' : 'none';
     sheetsInputs.style.display    = e.target.value === 'sync_sheets' ? 'flex' : 'none';
+    const insertInputs = document.getElementById('insertInputs');
+    if (insertInputs) insertInputs.style.display = e.target.value === 'insert_record' ? 'flex' : 'none';
+});
+
+if (connectStravaBtn) {
+    connectStravaBtn.addEventListener('click', () => {
+        const width = 500, height = 600;
+        const left = (window.innerWidth - width) / 2;
+        const top = (window.innerHeight - height) / 2;
+        window.open('/strava/auth', 'StravaAuth', `width=${width},height=${height},left=${left},top=${top}`);
+    });
+}
+
+window.addEventListener('message', (event) => {
+    if (event.data && event.data.type === 'STRAVA_AUTH_SUCCESS') {
+        if (stravaAccessToken) stravaAccessToken.value = event.data.token;
+    }
 });
 
 // ─── 6. METRICS BAR ───────────────────────────────────
@@ -587,10 +617,10 @@ function addDataTree(parentNodeId, obj, level) {
             // Each array item as a child
             value.forEach((item, i) => {
                 const childId = idCounter++;
-                const strVal = String(item);
-                const short = strVal.length > 40 ? strVal.substring(0, 40) + '…' : strVal;
+                const strVal = typeof item === 'object' ? JSON.stringify(item, null, 2) : String(item);
+                const displayLabel = typeof item === 'object' ? `{ Object }` : (strVal.length > 40 ? strVal.substring(0, 40) + '…' : strVal);
                 nodes.add({
-                    id: childId, label: short, level: level + 1,
+                    id: childId, label: displayLabel, level: level + 1,
                     color: { background: bgColor, border: borderColor },
                     font: { color: fontColor, face: 'JetBrains Mono', size: 12 },
                     _title: `${key}[${i}]`, _cat: isAlertArr ? 'error' : isInsightArr ? 'output' : 'data',
@@ -666,11 +696,17 @@ async function runTrace(mode, body) {
     let fetchOpts = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
     
     if (mode === 'sync_strava') {
-        fetchUrl = `/sync/strava?access_token=${encodeURIComponent(body.access_token || '')}`;
+        const sheetIdParam = document.getElementById('stravaSheetId') && document.getElementById('stravaSheetId').value ? `&sheet_id=${encodeURIComponent(document.getElementById('stravaSheetId').value.trim())}` : '';
+        fetchUrl = `/sync/strava?access_token=${encodeURIComponent(body.access_token || '')}${sheetIdParam}`;
         fetchOpts = { method: 'POST' };
     } else if (mode === 'sync_sheets') {
-        fetchUrl = `/sync/sheets?domain=${encodeURIComponent(body.domain || 'triathlon')}`;
+        const sheetIdParam = customSheetId && customSheetId.value ? `&sheet_id=${encodeURIComponent(customSheetId.value.trim())}` : '';
+        fetchUrl = `/sync/sheets?domain=${encodeURIComponent(body.domain || 'triathlon')}${sheetIdParam}`;
         fetchOpts = { method: 'POST' };
+    } else if (mode === 'insert_record') {
+        const insertSheetId = document.getElementById('insertSheetId') && document.getElementById('insertSheetId').value ? `?sheet_id=${encodeURIComponent(document.getElementById('insertSheetId').value.trim())}` : '';
+        fetchUrl = `/data/insert${insertSheetId}`;
+        fetchOpts = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: body.payload };
     } else if (mode === 'ml_training') {
         fetchUrl = `/analyze/ml_training`;
         fetchOpts = { method: 'GET' };
@@ -740,6 +776,7 @@ executeBtn.addEventListener('click', async () => {
     else if (mode === 'rowing') body.athlete = document.getElementById('athleteName').value;
     else if (mode === 'sync_strava') body.access_token = document.getElementById('stravaAccessToken').value;
     else if (mode === 'sync_sheets') body.domain = document.getElementById('sheetsDomain').value;
+    else if (mode === 'insert_record') body.payload = document.getElementById('insertPayload').value;
 
     executeBtn.disabled = true;
     btnLoader.style.display = 'block';

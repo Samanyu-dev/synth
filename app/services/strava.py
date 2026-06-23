@@ -26,15 +26,16 @@ def get_auth_url(redirect_uri: str = "http://localhost:8000/strava/callback") ->
     Generate the Strava OAuth2 authorization URL.
     The user clicks this to grant access to their Strava data.
     """
+    import urllib.parse
     settings = get_settings()
     params = {
         "client_id": settings.strava_client_id,
         "redirect_uri": redirect_uri,
         "response_type": "code",
         "approval_prompt": "auto",
-        "scope": "read,activity:read_all"
+        "scope": "activity:read_all"
     }
-    url = f"{STRAVA_AUTH_URL}?" + "&".join(f"{k}={v}" for k, v in params.items())
+    url = f"{STRAVA_AUTH_URL}?" + urllib.parse.urlencode(params)
     return url
 
 
