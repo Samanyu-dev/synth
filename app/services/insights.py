@@ -161,7 +161,33 @@ def _call_gemini(prompt: str, fallback_alerts: list[str]) -> InsightReport:
                 
             except Exception as claude_e:
                 logger.error(f"Claude fallback also failed: {str(claude_e)}")
-                return _fallback_report(fallback_alerts, error="Both AI services unavailable")
+                # Do not return here; fall through to Groq
+
+        # Fallback to Groq if previous models failed or are missing keys
+        if settings.groq_api_key:
+            logger.info("Attempting fallback to Groq Llama 3...")
+            try:
+                import groq
+                groq_client = groq.Groq(api_key=settings.groq_api_key)
+                
+                groq_prompt = prompt + "\n\nReturn ONLY a raw JSON object with keys: 'insights' (list of strings), 'risks' (list of strings), 'recommendations' (list of strings). No markdown formatting or extra text."
+                
+                completion = groq_client.chat.completions.create(
+                    model="llama-3.3-70b-versatile",
+                    messages=[
+                        {"role": "user", "content": groq_prompt}
+                    ],
+                    temperature=0.2,
+                    max_tokens=1024,
+                    response_format={"type": "json_object"}
+                )
+                
+                response_text = completion.choices[0].message.content
+                return InsightReport.model_validate_json(response_text.strip())
+                
+            except Exception as groq_e:
+                logger.error(f"Groq fallback also failed: {str(groq_e)}")
+                return _fallback_report(fallback_alerts, error="All AI services unavailable")
                 
         return _fallback_report(fallback_alerts, error="Gemini API unavailable")
 

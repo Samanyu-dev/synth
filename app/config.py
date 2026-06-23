@@ -23,6 +23,11 @@ class Settings(BaseSettings):
         description="Anthropic API key for Claude synthesis"
     )
 
+    groq_api_key: str = Field(
+        default="",
+        description="Groq API key for Llama fallback synthesis"
+    )
+
     # Data paths — default to local data/ directory
     triathlon_daily_csv: str = Field(
         default="data/Copy of Triathlon Training Sync-daily_summary.csv",
